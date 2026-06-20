@@ -3,13 +3,12 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 
 const LV_COLORS = { lv1: '#93c5fd', lv2: '#6ee7b7', lv3: '#fcd34d', lv4: '#fb923c', lv5: '#f87171', adm: '#c084fc' }
 
-export default function DailyPcChart({ data }) {
-  // data: [{ day, lv1, lv2, lv3, lv4, lv5, adm }]
+export default function DailyPcChart({ data, xKey = 'day', height = 200 }) {
   return (
-    <ResponsiveContainer width="100%" height={200}>
+    <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-        <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+        <XAxis dataKey={xKey} tick={{ fontSize: 11 }} />
         <YAxis tick={{ fontSize: 11 }} />
         <Tooltip />
         <Legend wrapperStyle={{ fontSize: 11 }} />

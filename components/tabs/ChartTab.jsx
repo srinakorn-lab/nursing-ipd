@@ -6,6 +6,7 @@ import { loadDailyEntries, loadEntries, apiLoadDailyEntries, apiLoadEntries } fr
 import { calcProd, calcPts, getAvailBeds } from '../../lib/calc'
 import ProdBarChart from '../charts/ProdBarChart'
 import BorBarChart from '../charts/BorBarChart'
+import DailyPcChart from '../charts/DailyPcChart'
 
 const WARD_WARDS = WARDS.filter(w => w.type === 'WARD')
 const ICU_WARDS  = WARDS.filter(w => w.type === 'ICU')
@@ -62,11 +63,18 @@ export default function ChartTab({ cfg, oos, year, month }) {
         const d = i + 1
         const wardRows = WARD_WARDS.map(w => ({ w, e: loaded[w.id][d] || {} }))
         const icuRows  = ICU_WARDS.map(w  => ({ w, e: loaded[w.id][d] || {} }))
+        const allRows  = [...wardRows, ...icuRows]
+        const lvTotals = { lv1:0, lv2:0, lv3:0, lv4:0, lv5:0 }
+        allRows.forEach(r => {
+          const e = r.e.day || {}
+          ;['lv1','lv2','lv3','lv4','lv5'].forEach(k => { lvTotals[k] += e[k]||0 })
+        })
         return {
           day:  d,
           ward: calcGroup(wardRows, cfg, oos),
           icu:  calcGroup(icuRows,  cfg, oos),
-          all:  calcGroup([...wardRows, ...icuRows], cfg, oos),
+          all:  calcGroup(allRows, cfg, oos),
+          ...lvTotals,
         }
       })
       setMonthlyData(result)
@@ -84,17 +92,30 @@ export default function ChartTab({ cfg, oos, year, month }) {
         const ent  = (data && Object.keys(data).length) ? data : loadEntries(year, m)
         const wardRows = WARD_WARDS.map(w => ({ w, e: ent[w.id] || {} }))
         const icuRows  = ICU_WARDS.map(w  => ({ w, e: ent[w.id] || {} }))
+        const allRows = [...wardRows, ...icuRows]
+        const lvTotals = { lv1:0, lv2:0, lv3:0, lv4:0, lv5:0 }
+        allRows.forEach(r => {
+          const e = r.e.day || {}
+          ;['lv1','lv2','lv3','lv4','lv5'].forEach(k => { lvTotals[k] += e[k]||0 })
+        })
         return {
           label: THAI_SHORT[i],
           ward:  calcGroup(wardRows, cfg, oos),
           icu:   calcGroup(icuRows,  cfg, oos),
-          all:   calcGroup([...wardRows, ...icuRows], cfg, oos),
+          all:   calcGroup(allRows, cfg, oos),
+          ...lvTotals,
         }
       }))
       setYearlyData(result)
     }
     load()
   }, [year, viewMode, cfg, oos])
+
+  // ── Level data per ward (daily view) ─────────────────────────
+  const getLevelBars = (wards) => wards.map(w => {
+    const e = dailyWardData[w.id]?.day || {}
+    return { ward: w.id, lv1: e.lv1||0, lv2: e.lv2||0, lv3: e.lv3||0, lv4: e.lv4||0, lv5: e.lv5||0 }
+  })
 
   // ── Derived daily bar data ────────────────────────────────────
   const getDailyBars = (wards) => wards.map(w => {
@@ -264,6 +285,20 @@ export default function ChartTab({ cfg, oos, year, month }) {
               </div>
             </>
           )}
+
+          {/* Patient classification by level */}
+          {(group === 'all' || group === 'ward') && getLevelBars(WARD_WARDS).some(r => r.lv1+r.lv2+r.lv3+r.lv4+r.lv5 > 0) && (
+            <div className="card">
+              <div className="text-sm font-bold text-indigo-700 mb-3">🏥 IPD — จำนวนผู้ป่วยตาม Level (วันที่ {selDay})</div>
+              <DailyPcChart data={getLevelBars(WARD_WARDS)} xKey="ward" height={220} />
+            </div>
+          )}
+          {(group === 'all' || group === 'icu') && getLevelBars(ICU_WARDS).some(r => r.lv1+r.lv2+r.lv3+r.lv4+r.lv5 > 0) && (
+            <div className="card">
+              <div className="text-sm font-bold text-purple-700 mb-3">🏨 วิกฤต — จำนวนผู้ป่วยตาม Level (วันที่ {selDay})</div>
+              <DailyPcChart data={getLevelBars(ICU_WARDS)} xKey="ward" height={180} />
+            </div>
+          )}
         </>
       )}
 
@@ -282,6 +317,14 @@ export default function ChartTab({ cfg, oos, year, month }) {
             </div>
             <GroupBorLine data={monthlyData} xKey="day" />
           </div>
+          {monthlyData.some(d => d.lv1+d.lv2+d.lv3+d.lv4+d.lv5 > 0) && (
+            <div className="card">
+              <div className="text-sm font-bold text-slate-700 mb-3">
+                🧑‍⚕️ จำนวนผู้ป่วยตาม Level รายวัน — {titleMonth} พ.ศ. {year}
+              </div>
+              <DailyPcChart data={monthlyData} xKey="day" height={220} />
+            </div>
+          )}
         </>
       )}
 
@@ -300,6 +343,14 @@ export default function ChartTab({ cfg, oos, year, month }) {
             </div>
             <GroupBorLine data={yearlyData} xKey="label" />
           </div>
+          {yearlyData.some(d => d.lv1+d.lv2+d.lv3+d.lv4+d.lv5 > 0) && (
+            <div className="card">
+              <div className="text-sm font-bold text-slate-700 mb-3">
+                🧑‍⚕️ จำนวนผู้ป่วยตาม Level รายเดือน — พ.ศ. {year}
+              </div>
+              <DailyPcChart data={yearlyData} xKey="label" height={220} />
+            </div>
+          )}
         </>
       )}
     </div>
