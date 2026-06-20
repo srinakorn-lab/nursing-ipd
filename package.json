@@ -14,7 +14,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "next": "^14.2.35",
+    "next": "^15.5.19",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-is": "^19.2.7",
@@ -32,6 +32,7 @@
     "esbuild@0.17.19": true,
     "sharp@0.33.5": true,
     "workerd@1.20250718.0": true,
-    "fsevents@2.3.3": true
+    "fsevents@2.3.3": true,
+    "sharp@0.34.5": true
   }
 }

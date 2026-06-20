@@ -6,4 +6,4 @@ pages_build_output_dir = ".vercel/output/static"
 [[d1_databases]]
 binding = "DB"
 database_name = "ipd-productivity"
-database_id = "PLACEHOLDER_FILL_AFTER_CREATE"
+database_id = "992fb2c5-7dee-4fb6-8da1-baf4670feb54"
