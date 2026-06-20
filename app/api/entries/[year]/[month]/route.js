@@ -18,8 +18,9 @@ export async function GET(request, { params }) {
     const data = {}
     results.forEach(r => {
       if (!data[r.ward_id]) data[r.ward_id] = {}
-      data[r.ward_id][r.shift] = {
-        wardId: r.ward_id, shift: r.shift,
+      const shift = r.shift.toLowerCase()
+      data[r.ward_id][shift] = {
+        wardId: r.ward_id, shift,
         lv1: r.lv1, lv2: r.lv2, lv3: r.lv3, lv4: r.lv4, lv5: r.lv5,
         adm: r.adm, trf: r.trf, ods: r.ods,
         rn: r.rn, pn: r.pn, na: r.na,
