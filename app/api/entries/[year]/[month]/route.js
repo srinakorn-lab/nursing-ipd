@@ -1,11 +1,9 @@
+import { getRequestContext } from '@cloudflare/next-on-pages'
+
 export const runtime = 'edge'
 
 function getDB() {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { getRequestContext } = require('@cloudflare/next-on-pages')
-    return getRequestContext().env.DB
-  } catch { return null }
+  try { return getRequestContext().env.DB } catch { return null }
 }
 
 export async function GET(request, { params }) {
