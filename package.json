@@ -13,8 +13,11 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "overrides": {
+    "next": "15.5.2"
+  },
   "dependencies": {
-    "next": "^16.2.9",
+    "next": "15.5.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-is": "^19.2.7",
