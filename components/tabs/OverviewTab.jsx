@@ -9,7 +9,7 @@ import { calcProd, prodStatus, getAvailBeds, calcPts } from '../../lib/calc'
 import { WARDS, THAI_MONTHS } from '../../lib/constants'
 import { apiLoadDailyEntries, loadDailyEntries, dailyStorageKey } from '../../lib/storage'
 
-export default function OverviewTab({ entries, cfg, oos, selected, onToggle, onSelectAll, onClearAll, year, month }) {
+export default function OverviewTab({ entries, cfg, oos, selected, onToggle, onSelectAll, onClearAll, year, month, dataVersion = 0 }) {
   const [selDay, setSelDay] = useState(1)
   const [mounted, setMounted] = useState(false)
   const [selShift, setSelShift] = useState('day')
@@ -21,14 +21,15 @@ export default function OverviewTab({ entries, cfg, oos, selected, onToggle, onS
     async function load() {
       const result = {}
       await Promise.all(WARDS.map(async w => {
+        const local = loadDailyEntries(year, month, w.id)
         const data = await apiLoadDailyEntries(year, month, w.id)
-        const src  = (data && Object.keys(data).length) ? data : loadDailyEntries(year, month, w.id)
+        const src  = { ...local, ...(data || {}) }
         result[w.id] = src[selDay] || {}
       }))
       setDailyAll(result)
     }
     load()
-  }, [year, month, selDay])
+  }, [year, month, selDay, dataVersion])
 
   const wardData = useMemo(() => {
     return WARDS.filter(w => selected.includes(w.id)).map(w => {

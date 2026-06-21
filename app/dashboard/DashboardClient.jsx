@@ -44,17 +44,17 @@ export default function DashboardPage() {
   function openEntry(initial = null) { setEntryInit(initial); setEntryOpen(true) }
   function openOos(wardId) { setOosWard(wardId); setOosOpen(true) }
 
+  const [dataVersion, setDataVersion] = useState(0)
   async function handleSaveEntry(form) {
-    // Save to monthly entries
     const updated = { ...entries }
     if (!updated[form.wardId]) updated[form.wardId] = {}
     updated[form.wardId][form.shift.toLowerCase()] = form
-    // Also save to daily entries — await both before closing modal
     const d = new Date(form.date).getDate()
     await Promise.all([
       saveEntries(updated),
       saveDailyEntry(selYear, selMonth, form.wardId, d, form.shift, form),
     ])
+    setDataVersion(v => v + 1)  // trigger child re-fetch
   }
 
   function handleSaveOos(wardId, data) {
@@ -96,7 +96,7 @@ export default function DashboardPage() {
             onOpenEntry={() => openEntry()} />
           <NavTabs active={activeTab} onChange={setTab} />
           <div className="min-h-[calc(100vh-120px)]">
-            {activeTab === 'overview'  && <OverviewTab {...tabProps} year={selYear} month={selMonth} />}
+            {activeTab === 'overview'  && <OverviewTab {...tabProps} year={selYear} month={selMonth} dataVersion={dataVersion} />}
             {activeTab === 'table'     && <TableTab    {...tabProps} />}
             {activeTab === 'chart'     && <ChartTab    cfg={cfg} oos={oos} year={selYear} month={selMonth} />}
             {activeTab === 'daily'     && <DailyTab    cfg={cfg} year={selYear} month={selMonth} onOpenDailyEdit={openDailyEdit} />}
