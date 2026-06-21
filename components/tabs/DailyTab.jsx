@@ -14,13 +14,14 @@ export default function DailyTab({ cfg, year, month, onOpenDailyEdit }) {
   const ward = WARDS.find(w => w.id === wardId)
 
   useEffect(() => {
+    const local = loadDailyEntries(year, month, wardId)
+    setDaily(local)  // optimistic from cache
     apiLoadDailyEntries(year, month, wardId).then(data => {
-      if (data) {
+      if (data !== null) {
+        const merged = { ...local, ...data }
         if (typeof window !== 'undefined')
-          localStorage.setItem(dailyStorageKey(year, month, wardId), JSON.stringify(data))
-        setDaily(data)
-      } else {
-        setDaily(loadDailyEntries(year, month, wardId))
+          localStorage.setItem(dailyStorageKey(year, month, wardId), JSON.stringify(merged))
+        setDaily(merged)
       }
     })
   }, [year, month, wardId])

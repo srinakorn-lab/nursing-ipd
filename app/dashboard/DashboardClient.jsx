@@ -44,15 +44,17 @@ export default function DashboardPage() {
   function openEntry(initial = null) { setEntryInit(initial); setEntryOpen(true) }
   function openOos(wardId) { setOosWard(wardId); setOosOpen(true) }
 
-  function handleSaveEntry(form) {
+  async function handleSaveEntry(form) {
     // Save to monthly entries
     const updated = { ...entries }
     if (!updated[form.wardId]) updated[form.wardId] = {}
     updated[form.wardId][form.shift.toLowerCase()] = form
-    saveEntries(updated)
-    // Also save to daily entries
+    // Also save to daily entries — await both before closing modal
     const d = new Date(form.date).getDate()
-    saveDailyEntry(selYear, selMonth, form.wardId, d, form.shift, form)
+    await Promise.all([
+      saveEntries(updated),
+      saveDailyEntry(selYear, selMonth, form.wardId, d, form.shift, form),
+    ])
   }
 
   function handleSaveOos(wardId, data) {
