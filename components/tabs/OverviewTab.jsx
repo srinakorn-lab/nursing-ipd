@@ -33,10 +33,9 @@ export default function OverviewTab({ entries, cfg, oos, selected, onToggle, onS
   const wardData = useMemo(() => {
     return WARDS.filter(w => selected.includes(w.id)).map(w => {
       const daily   = dailyAll[w.id] || {}
-      const monthly = entries[w.id] || {}
-      const hasDaily = !!(daily.day || daily.night)
-      const de = hasDaily ? daily.day   : monthly.day
-      const ne = hasDaily ? daily.night : monthly.night
+      const de = daily.day
+      const ne = daily.night
+      const hasDaily = !!(de || ne)
       // active entry based on selected shift
       const ae = selShift === 'day' ? de : ne
       const dProd = calcProd(de, w.type, cfg)
@@ -47,13 +46,13 @@ export default function OverviewTab({ entries, cfg, oos, selected, onToggle, onS
       const aRN   = ae?.rn || 0
       const avail = getAvailBeds(w, oos)
       const bor   = avail > 0 && aPts > 0 ? +(aPts / avail * 100).toFixed(1) : 0
-      const free  = aPts > 0 ? avail - Math.round(aPts) : null
+      const free  = ae ? avail - Math.round(aPts) : null
       const aRatio = aPts > 0 && aRN > 0 ? +(aPts / aRN).toFixed(1) : null
       const target = w.type === 'ICU' ? cfg.icu_ratio : cfg.ward_ratio
       return { ...w, de, ne, ae, dProd, nProd, aProd, dPts, nPts, aPts, aRN, avail, bor, free, aRatio, target,
         aStatus: prodStatus(aProd, cfg), dStatus: prodStatus(dProd, cfg), nStatus: prodStatus(nProd, cfg), hasDaily }
     })
-  }, [dailyAll, entries, cfg, oos, selected, selShift])
+  }, [dailyAll, cfg, oos, selected, selShift])
 
   const hasAnyData = wardData.some(w => w.ae)
   const totPts   = wardData.reduce((s, w) => s + w.aPts, 0)
