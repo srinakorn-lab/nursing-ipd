@@ -18,8 +18,9 @@ export async function GET(request, { params }) {
     const data = {}
     results.forEach(r => {
       if (!data[r.day]) data[r.day] = {}
-      data[r.day][r.shift] = {
-        wardId: r.ward_id, shift: r.shift, day: r.day,
+      const shift = r.shift.toLowerCase()
+      data[r.day][shift] = {
+        wardId: r.ward_id, shift, day: r.day,
         lv1: r.lv1, lv2: r.lv2, lv3: r.lv3, lv4: r.lv4, lv5: r.lv5,
         adm: r.adm, trf: r.trf, ods: r.ods,
         rn: r.rn, pn: r.pn, na: r.na,
@@ -37,6 +38,8 @@ export async function POST(request, { params }) {
     if (!DB) return Response.json({ ok: false }, { status: 503 })
     const { year, month, wardId } = await params
     const e = await request.json()
+    const deviceId = request.headers.get('x-device-id') || 'unknown'
+    // Main table (current state)
     await DB.prepare(`
       INSERT INTO daily_entries (year,month,day,ward_id,shift,lv1,lv2,lv3,lv4,lv5,adm,trf,ods,rn,pn,na)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
@@ -47,6 +50,14 @@ export async function POST(request, { params }) {
     `).bind(+year, +month, e.day|0, wardId, e.shift,
       e.lv1||0, e.lv2||0, e.lv3||0, e.lv4||0, e.lv5||0,
       e.adm||0, e.trf||0, e.ods||0, e.rn||0, e.pn||0, e.na||0
+    ).run()
+    // Audit log
+    await DB.prepare(`
+      INSERT INTO entries_log (year,month,day,ward_id,shift,lv1,lv2,lv3,lv4,lv5,adm,trf,ods,rn,pn,na,device_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    `).bind(+year, +month, e.day|0, wardId, e.shift,
+      e.lv1||0, e.lv2||0, e.lv3||0, e.lv4||0, e.lv5||0,
+      e.adm||0, e.trf||0, e.ods||0, e.rn||0, e.pn||0, e.na||0, deviceId
     ).run()
     return Response.json({ ok: true })
   } catch {

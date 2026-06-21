@@ -38,6 +38,8 @@ export async function POST(request, { params }) {
     if (!DB) return Response.json({ ok: false }, { status: 503 })
     const { year, month } = await params
     const e = await request.json()
+    const deviceId = request.headers.get('x-device-id') || 'unknown'
+    // Write to main table (current state, LWW)
     await DB.prepare(`
       INSERT INTO monthly_entries (year,month,ward_id,shift,lv1,lv2,lv3,lv4,lv5,adm,trf,ods,rn,pn,na)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
@@ -48,6 +50,14 @@ export async function POST(request, { params }) {
     `).bind(+year, +month, e.wardId, e.shift,
       e.lv1||0, e.lv2||0, e.lv3||0, e.lv4||0, e.lv5||0,
       e.adm||0, e.trf||0, e.ods||0, e.rn||0, e.pn||0, e.na||0
+    ).run()
+    // Append to audit log (every save kept)
+    await DB.prepare(`
+      INSERT INTO entries_log (year,month,day,ward_id,shift,lv1,lv2,lv3,lv4,lv5,adm,trf,ods,rn,pn,na,device_id)
+      VALUES (?,?,NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    `).bind(+year, +month, e.wardId, e.shift,
+      e.lv1||0, e.lv2||0, e.lv3||0, e.lv4||0, e.lv5||0,
+      e.adm||0, e.trf||0, e.ods||0, e.rn||0, e.pn||0, e.na||0, deviceId
     ).run()
     return Response.json({ ok: true })
   } catch {
