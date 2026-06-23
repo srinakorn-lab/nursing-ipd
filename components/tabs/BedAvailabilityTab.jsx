@@ -7,8 +7,8 @@ const FIELDS = [
   { key: 'single_free',    label: 'ห้องว่างเดี่ยว', color: '#0284c7' },
   { key: 'male_free',      label: 'รวมชาย',         color: '#2563eb' },
   { key: 'female_free',    label: 'รวมหญิง',        color: '#db2777' },
-  { key: 'monitor_male',   label: 'Monitor ชาย',    color: '#7c3aed' },
-  { key: 'monitor_female', label: 'Monitor หญิง',   color: '#c026d3' },
+  { key: 'monitor_male',   label: 'Monitor รวมชาย',  color: '#7c3aed' },
+  { key: 'monitor_female', label: 'Monitor รวมหญิง', color: '#c026d3' },
 ]
 
 const EMPTY_ENTRY = { wardId: WARDS[0].id, single_free: 0, male_free: 0, female_free: 0, monitor_male: 0, monitor_female: 0, remark: '' }
