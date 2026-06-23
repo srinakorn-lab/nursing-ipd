@@ -61,6 +61,17 @@ export default function BedAvailabilityTab() {
     return t
   }, [data])
 
+  // Per-field breakdown: which wards contribute to each bed type
+  const breakdown = useMemo(() => {
+    const b = {}
+    FIELDS.forEach(f => {
+      b[f.key] = WARDS
+        .filter(w => (data[w.id]?.[f.key] || 0) > 0)
+        .map(w => ({ name: w.name, n: data[w.id][f.key] }))
+    })
+    return b
+  }, [data])
+
   // Quick contact list: wards with any free bed
   const contactList = useMemo(() => {
     return WARDS.map(w => {
@@ -91,10 +102,20 @@ export default function BedAvailabilityTab() {
         <div className="text-sm font-bold text-slate-700 mb-3">🛏 สรุปเตียงว่างทุก Ward</div>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
           {FIELDS.map(f => (
-            <div key={f.key} className="rounded-xl border px-3 py-3 text-center"
+            <div key={f.key} className="rounded-xl border px-3 py-3"
                  style={{ borderColor: f.color + '44', background: f.color + '0a' }}>
-              <div className="text-xs text-slate-500">{f.label}</div>
-              <div className="text-2xl font-bold mt-1" style={{ color: f.color }}>{totals[f.key]}</div>
+              <div className="text-xs text-slate-500 text-center">{f.label}</div>
+              <div className="text-2xl font-bold mt-1 text-center" style={{ color: f.color }}>{totals[f.key]}</div>
+              {breakdown[f.key].length > 0 && (
+                <div className="mt-2 pt-2 border-t space-y-0.5" style={{ borderColor: f.color + '33' }}>
+                  {breakdown[f.key].map(w => (
+                    <div key={w.name} className="flex justify-between text-xs">
+                      <span className="text-slate-600 font-medium">{w.name}</span>
+                      <span className="font-bold" style={{ color: f.color }}>{w.n}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
