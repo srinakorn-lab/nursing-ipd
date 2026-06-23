@@ -1,5 +1,6 @@
 'use client'
 import { useMemo, useState, useEffect } from 'react'
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { WARDS, THAI_MONTHS } from '../../lib/constants'
 import { apiLoadLog } from '../../lib/storage'
 import { calcProd, calcPts } from '../../lib/calc'
@@ -37,6 +38,60 @@ export default function ReportTab({ cfg, year, month }) {
     const prod = calcProd(r, w?.type || 'WARD', cfg)
     return { ...r, _pts: pts, _prod: prod, _wardName: w?.name || r.ward_id, _wardType: w?.type || 'WARD' }
   }), [rows, cfg])
+
+  // Daily: aggregate per ward+shift for chart
+  const dailyChart = useMemo(() => {
+    if (view !== 'daily') return []
+    const byWard = {}
+    enriched.forEach(r => {
+      const k = r.ward_id
+      if (!byWard[k]) byWard[k] = { ward: k, dayPts: 0, nightPts: 0, dayProd: 0, dayProdN: 0, nightProd: 0, nightProdN: 0 }
+      if (r.shift === 'day') {
+        byWard[k].dayPts += r._pts
+        if (r._prod != null) { byWard[k].dayProd += r._prod; byWard[k].dayProdN++ }
+      } else {
+        byWard[k].nightPts += r._pts
+        if (r._prod != null) { byWard[k].nightProd += r._prod; byWard[k].nightProdN++ }
+      }
+    })
+    return WARDS.filter(w => byWard[w.id]).map(w => {
+      const b = byWard[w.id]
+      return {
+        ward: w.id,
+        dayPts: b.dayPts, nightPts: b.nightPts,
+        dayProd: b.dayProdN ? +(b.dayProd / b.dayProdN).toFixed(1) : 0,
+        nightProd: b.nightProdN ? +(b.nightProd / b.nightProdN).toFixed(1) : 0,
+      }
+    })
+  }, [view, enriched])
+
+  // Monthly: aggregate per day for chart
+  const monthlyChart = useMemo(() => {
+    if (view !== 'monthly') return []
+    const byDay = {}
+    enriched.forEach(r => {
+      if (!r.day) return
+      const k = r.day
+      if (!byDay[k]) byDay[k] = { day: k, dayPts: 0, nightPts: 0, dayProd: 0, dayProdN: 0, nightProd: 0, nightProdN: 0 }
+      if (r.shift === 'day') {
+        byDay[k].dayPts += r._pts
+        if (r._prod != null) { byDay[k].dayProd += r._prod; byDay[k].dayProdN++ }
+      } else {
+        byDay[k].nightPts += r._pts
+        if (r._prod != null) { byDay[k].nightProd += r._prod; byDay[k].nightProdN++ }
+      }
+    })
+    const dim = new Date(year - 543, month, 0).getDate()
+    return Array.from({ length: dim }, (_, i) => {
+      const d = byDay[i+1]
+      return {
+        day: i+1,
+        dayPts: d?.dayPts || 0, nightPts: d?.nightPts || 0,
+        dayProd: d?.dayProdN ? +(d.dayProd / d.dayProdN).toFixed(1) : null,
+        nightProd: d?.nightProdN ? +(d.nightProd / d.nightProdN).toFixed(1) : null,
+      }
+    })
+  }, [view, enriched, year, month])
 
   // Yearly summary (group by month)
   const yearlySummary = useMemo(() => {
@@ -132,6 +187,111 @@ export default function ReportTab({ cfg, year, month }) {
       <div className="text-sm text-slate-500">
         {loading ? '⏳ กำลังโหลด...' : `พบ ${view==='yearly' ? yearlySummary.filter(r=>r.records>0).length+' เดือน' : enriched.length+' record'}`}
       </div>
+
+      {/* ─── CHARTS ─────────────────────────────────────────────── */}
+      {view === 'daily' && dailyChart.length > 0 && (
+        <>
+          <div className="card">
+            <div className="text-sm font-bold text-slate-700 mb-3">📊 Pts ราย Ward — วันที่ {selDay}</div>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={dailyChart}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="ward" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="dayPts"   name="☀️ DAY"   fill="#0284c7" radius={[4,4,0,0]} />
+                <Bar dataKey="nightPts" name="🌙 NIGHT" fill="#7c3aed" radius={[4,4,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="card">
+            <div className="text-sm font-bold text-slate-700 mb-3">📈 PROD% ราย Ward — วันที่ {selDay}</div>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={dailyChart}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="ward" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} domain={[0, 'auto']} />
+                <Tooltip />
+                <Legend />
+                <ReferenceLine y={95} stroke="#d97706" strokeDasharray="4 4" label={{ value: '95%', position: 'right', fontSize: 10, fill: '#d97706' }} />
+                <ReferenceLine y={110} stroke="#dc2626" strokeDasharray="4 4" label={{ value: '110%', position: 'right', fontSize: 10, fill: '#dc2626' }} />
+                <Bar dataKey="dayProd"   name="☀️ DAY %"   fill="#0284c7" radius={[4,4,0,0]} />
+                <Bar dataKey="nightProd" name="🌙 NIGHT %" fill="#7c3aed" radius={[4,4,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </>
+      )}
+
+      {view === 'monthly' && (
+        <>
+          <div className="card">
+            <div className="text-sm font-bold text-slate-700 mb-3">📊 Pts รายวัน — {THAI_MONTHS[month-1]} {year}</div>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={monthlyChart}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="dayPts"   name="☀️ DAY"   fill="#0284c7" radius={[2,2,0,0]} />
+                <Bar dataKey="nightPts" name="🌙 NIGHT" fill="#7c3aed" radius={[2,2,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="card">
+            <div className="text-sm font-bold text-slate-700 mb-3">📈 PROD% รายวัน — {THAI_MONTHS[month-1]} {year}</div>
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={monthlyChart}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} domain={[0, 'auto']} />
+                <Tooltip />
+                <Legend />
+                <ReferenceLine y={95}  stroke="#d97706" strokeDasharray="4 4" label={{ value: '95%',  position: 'right', fontSize: 10, fill: '#d97706' }} />
+                <ReferenceLine y={110} stroke="#dc2626" strokeDasharray="4 4" label={{ value: '110%', position: 'right', fontSize: 10, fill: '#dc2626' }} />
+                <Line type="monotone" dataKey="dayProd"   name="☀️ DAY %"   stroke="#0284c7" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                <Line type="monotone" dataKey="nightProd" name="🌙 NIGHT %" stroke="#7c3aed" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </>
+      )}
+
+      {view === 'yearly' && (
+        <>
+          <div className="card">
+            <div className="text-sm font-bold text-slate-700 mb-3">📊 จำนวน Record รายเดือน — พ.ศ. {year}</div>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={yearlySummary.map(r => ({ ...r, name: THAI_MONTHS[r.month-1] }))}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Bar dataKey="records" name="Record" fill="#6366f1" radius={[4,4,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="card">
+            <div className="text-sm font-bold text-slate-700 mb-3">📈 Pts เฉลี่ย & PROD% เฉลี่ย รายเดือน</div>
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={yearlySummary.map(r => ({ ...r, name: THAI_MONTHS[r.month-1] }))}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                <YAxis yAxisId="l" tick={{ fontSize: 11 }} />
+                <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Legend />
+                <ReferenceLine yAxisId="r" y={95}  stroke="#d97706" strokeDasharray="4 4" />
+                <ReferenceLine yAxisId="r" y={110} stroke="#dc2626" strokeDasharray="4 4" />
+                <Line yAxisId="l" type="monotone" dataKey="avgPts"  name="Pts เฉลี่ย" stroke="#0284c7" strokeWidth={2} dot={{ r: 3 }} />
+                <Line yAxisId="r" type="monotone" dataKey="avgProd" name="PROD% เฉลี่ย" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </>
+      )}
 
       {/* Yearly view: monthly summary */}
       {view === 'yearly' && (
