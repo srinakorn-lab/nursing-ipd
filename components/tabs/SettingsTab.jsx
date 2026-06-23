@@ -40,6 +40,14 @@ export default function SettingsTab({ cfg, onSaveCfg }) {
       thr_opt_hi:  +form.thr_opt_hi,
       thr_under:   +form.thr_under,
       thr_overload: +form.thr_overload,
+      thr_opt_lo_day:    +form.thr_opt_lo_day,
+      thr_opt_hi_day:    +form.thr_opt_hi_day,
+      thr_under_day:     +form.thr_under_day,
+      thr_overload_day:  +form.thr_overload_day,
+      thr_opt_lo_night:    +form.thr_opt_lo_night,
+      thr_opt_hi_night:    +form.thr_opt_hi_night,
+      thr_under_night:     +form.thr_under_night,
+      thr_overload_night:  +form.thr_overload_night,
       w_ward_day:   form.w_ward_day,
       w_ward_night: form.w_ward_night,
       w_icu_day:    form.w_icu_day,
@@ -138,13 +146,33 @@ export default function SettingsTab({ cfg, onSaveCfg }) {
 
       {/* Thresholds */}
       <div className="card">
-        <div className="text-xs font-bold text-slate-600 uppercase mb-3">🎯 เกณฑ์ Productivity Status</div>
+        <div className="text-xs font-bold text-slate-600 uppercase mb-3">🎯 เกณฑ์ Productivity Status (ทั่วไป — fallback)</div>
         <div className="grid grid-cols-5 gap-3">
           {numField('Over Staff < ?%', form.thr_over, v => setF('thr_over', v))}
           {numField('Optimal lo ?%', form.thr_opt_lo, v => setF('thr_opt_lo', v))}
           {numField('Optimal hi ?%', form.thr_opt_hi, v => setF('thr_opt_hi', v))}
           {numField('Under Staff > ?%', form.thr_under, v => setF('thr_under', v))}
           {numField('Overload > ?%', form.thr_overload, v => setF('thr_overload', v))}
+        </div>
+      </div>
+
+      {/* Per-shift thresholds */}
+      <div className="card">
+        <div className="text-xs font-bold text-blue-600 uppercase mb-3">☀️ เกณฑ์ DAY</div>
+        <div className="grid grid-cols-4 gap-3">
+          {numField('Optimal lo ?%',     form.thr_opt_lo_day,    v => setF('thr_opt_lo_day', v))}
+          {numField('Optimal hi ?%',     form.thr_opt_hi_day,    v => setF('thr_opt_hi_day', v))}
+          {numField('Under Staff > ?%',  form.thr_under_day,     v => setF('thr_under_day', v))}
+          {numField('Overload > ?%',     form.thr_overload_day,  v => setF('thr_overload_day', v))}
+        </div>
+      </div>
+      <div className="card">
+        <div className="text-xs font-bold text-purple-600 uppercase mb-3">🌙 เกณฑ์ NIGHT</div>
+        <div className="grid grid-cols-4 gap-3">
+          {numField('Optimal lo ?%',     form.thr_opt_lo_night,    v => setF('thr_opt_lo_night', v))}
+          {numField('Optimal hi ?%',     form.thr_opt_hi_night,    v => setF('thr_opt_hi_night', v))}
+          {numField('Under Staff > ?%',  form.thr_under_night,     v => setF('thr_under_night', v))}
+          {numField('Overload > ?%',     form.thr_overload_night,  v => setF('thr_overload_night', v))}
         </div>
       </div>
 

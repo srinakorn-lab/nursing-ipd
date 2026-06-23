@@ -45,7 +45,7 @@ export default function TableTab({ cfg, oos, selected, onToggle, onSelectAll, on
       const dRatio = dPts > 0 && dRN > 0 ? +(dPts / dRN).toFixed(1) : null
       const nRatio = nPts > 0 && nRN > 0 ? +(nPts / nRN).toFixed(1) : null
       return { ...w, de, ne, dProd, nProd, dPts, nPts, dRN, nRN, avail, bor, free, oosInfo, dRatio, nRatio,
-        dStatus: prodStatus(dProd, cfg), nStatus: prodStatus(nProd, cfg) }
+        dStatus: prodStatus(dProd, cfg, 'day'), nStatus: prodStatus(nProd, cfg, 'night') }
     })
   }, [dailyAll, cfg, oos, selected])
 

@@ -36,7 +36,7 @@ export default function DailyTab({ cfg, year, month, onOpenDailyEdit }) {
       const dProd = calcProd(de, ward?.type || 'WARD', cfg)
       const nProd = calcProd(ne, ward?.type || 'WARD', cfg)
       return { d, de, ne, dPts: calcPts(de), nPts: calcPts(ne), dProd, nProd,
-        dStatus: prodStatus(dProd, cfg), nStatus: prodStatus(nProd, cfg) }
+        dStatus: prodStatus(dProd, cfg, 'day'), nStatus: prodStatus(nProd, cfg, 'night') }
     })
   }, [daily, ward, cfg, daysInMonth])
 

@@ -51,7 +51,7 @@ export default function OverviewTab({ entries, cfg, oos, selected, onToggle, onS
       const aRatio = aPts > 0 && aRN > 0 ? +(aPts / aRN).toFixed(1) : null
       const target = w.type === 'ICU' ? cfg.icu_ratio : cfg.ward_ratio
       return { ...w, de, ne, ae, dProd, nProd, aProd, dPts, nPts, aPts, aRN, avail, bor, free, aRatio, target,
-        aStatus: prodStatus(aProd, cfg), dStatus: prodStatus(dProd, cfg), nStatus: prodStatus(nProd, cfg), hasDaily }
+        aStatus: prodStatus(aProd, cfg, selShift), dStatus: prodStatus(dProd, cfg, 'day'), nStatus: prodStatus(nProd, cfg, 'night'), hasDaily }
     })
   }, [dailyAll, cfg, oos, selected, selShift])
 
