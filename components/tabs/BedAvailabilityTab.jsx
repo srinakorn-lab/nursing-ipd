@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { WARDS } from '../../lib/constants'
-import { apiLoadBeds, saveBeds, apiLoadBedsHistory } from '../../lib/storage'
+import { apiLoadBeds, saveBeds, apiLoadBedsHistory, deleteAllBeds, deleteBedsForWard, deleteBedRecord } from '../../lib/storage'
 
 const FIELDS = [
   { key: 'single_free',    label: 'ห้องว่างเดี่ยว', color: '#0284c7' },
@@ -38,6 +38,24 @@ export default function BedAvailabilityTab() {
   async function handleSave() {
     await saveBeds(form)
     setForm(EMPTY_ENTRY)
+    setReloadKey(k => k + 1)
+  }
+
+  async function handleClearAll() {
+    if (!confirm('⚠️ ลบข้อมูลเตียงว่างทั้งหมดทุก Ward (รวมประวัติ)? — ไม่สามารถกู้คืนได้')) return
+    await deleteAllBeds()
+    setReloadKey(k => k + 1)
+  }
+
+  async function handleClearWard(ward) {
+    if (!confirm(`ลบข้อมูลเตียงว่างทั้งหมดของ ${ward} (รวมประวัติ)?`)) return
+    await deleteBedsForWard(ward)
+    setReloadKey(k => k + 1)
+  }
+
+  async function handleDeleteRecord(id) {
+    if (!confirm('ลบ record นี้?')) return
+    await deleteBedRecord(id)
     setReloadKey(k => k + 1)
   }
 
@@ -177,9 +195,13 @@ export default function BedAvailabilityTab() {
 
       {/* Per-ward summary table */}
       <div className="card p-0 overflow-x-auto">
-        <div className="px-4 py-3 border-b border-slate-200 flex items-center">
+        <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
           <div className="text-sm font-bold text-slate-700 flex-1">รายแผนก (snapshot ล่าสุด)</div>
           {loading && <span className="text-xs text-slate-400">⏳ โหลด...</span>}
+          <button onClick={handleClearAll}
+            className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 font-semibold">
+            🗑 ล้างข้อมูลทั้งหมด
+          </button>
         </div>
         <table className="w-full text-sm border-collapse">
           <thead>
@@ -206,10 +228,18 @@ export default function BedAvailabilityTab() {
                   ))}
                   <td className="px-3 py-2 text-center text-xs text-slate-500">{fmtTime(d?.saved_at)}</td>
                   <td className="px-3 py-2 text-center">
-                    <button onClick={() => pickWard(w.id)}
-                      className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-100">
-                      📝 แก้
-                    </button>
+                    <div className="flex gap-1 justify-center">
+                      <button onClick={() => pickWard(w.id)}
+                        className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-100">
+                        📝 แก้
+                      </button>
+                      {d && (
+                        <button onClick={() => handleClearWard(w.id)}
+                          className="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50">
+                          🗑
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               )
@@ -270,6 +300,7 @@ export default function BedAvailabilityTab() {
                 {FIELDS.map(f => <th key={f.key} className="px-2 py-2 font-bold uppercase" style={{ color: f.color }}>{f.label}</th>)}
                 <th className="text-left px-3 py-2 text-slate-500 font-bold">หมายเหตุ</th>
                 <th className="px-2 py-2 text-slate-500 font-bold">Device</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -279,10 +310,14 @@ export default function BedAvailabilityTab() {
                   {FIELDS.map(f => <td key={f.key} className="px-2 py-1.5 text-center">{r[f.key] || 0}</td>)}
                   <td className="px-3 py-1.5 text-slate-500">{r.remark || ''}</td>
                   <td className="px-2 py-1.5 text-slate-400 text-[10px]">{r.device_id?.slice(0,8) || ''}</td>
+                  <td className="px-2 py-1.5 text-center">
+                    <button onClick={() => handleDeleteRecord(r.id)}
+                      className="text-xs text-red-500 hover:text-red-700">🗑</button>
+                  </td>
                 </tr>
               ))}
               {history.length === 0 && (
-                <tr><td colSpan={8} className="text-center text-slate-400 py-6">ยังไม่มีประวัติ</td></tr>
+                <tr><td colSpan={9} className="text-center text-slate-400 py-6">ยังไม่มีประวัติ</td></tr>
               )}
             </tbody>
           </table>

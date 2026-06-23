@@ -26,6 +26,31 @@ export async function GET() {
   }
 }
 
+// DELETE /api/beds          → clear ALL bed-availability records
+// DELETE /api/beds?ward=W5A  → clear records for one ward
+// DELETE /api/beds?id=123    → delete a single record
+export async function DELETE(request) {
+  try {
+    const DB = getDB()
+    if (!DB) return Response.json({ ok: false }, { status: 503 })
+    const url = new URL(request.url)
+    const id   = url.searchParams.get('id')
+    const ward = url.searchParams.get('ward')
+    if (id) {
+      const r = await DB.prepare('DELETE FROM bed_availability_log WHERE id=?').bind(+id).run()
+      return Response.json({ ok: true, deleted: r.meta?.changes ?? 0 })
+    }
+    if (ward) {
+      const r = await DB.prepare('DELETE FROM bed_availability_log WHERE ward_id=?').bind(ward).run()
+      return Response.json({ ok: true, deleted: r.meta?.changes ?? 0 })
+    }
+    const r = await DB.prepare('DELETE FROM bed_availability_log').run()
+    return Response.json({ ok: true, deleted: r.meta?.changes ?? 0 })
+  } catch (err) {
+    return Response.json({ ok: false, error: String(err) }, { status: 503 })
+  }
+}
+
 // POST /api/beds — append new snapshot
 export async function POST(request) {
   try {
