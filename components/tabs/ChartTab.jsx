@@ -265,7 +265,7 @@ export default function ChartTab({ cfg, oos, year, month }) {
             <>
               <div className="card">
                 <div className="text-sm font-bold text-indigo-700 mb-3">🏥 IPD — Productivity% (วันที่ {selDay})</div>
-                <ProdBarChart data={getDailyBars(WARD_WARDS)} />
+                <ProdBarChart data={getDailyBars(WARD_WARDS)} cfg={cfg} />
               </div>
               <div className="card">
                 <div className="text-sm font-bold text-indigo-700 mb-3">🏥 IPD — BOR% (วันที่ {selDay})</div>
@@ -279,7 +279,7 @@ export default function ChartTab({ cfg, oos, year, month }) {
             <>
               <div className="card">
                 <div className="text-sm font-bold text-purple-700 mb-3">🏨 วิกฤต (ICU/CCU/NCU) — Productivity% (วันที่ {selDay})</div>
-                <ProdBarChart data={getDailyBars(ICU_WARDS)} />
+                <ProdBarChart data={getDailyBars(ICU_WARDS)} cfg={cfg} />
               </div>
               <div className="card">
                 <div className="text-sm font-bold text-purple-700 mb-3">🏨 วิกฤต (ICU/CCU/NCU) — BOR% (วันที่ {selDay})</div>

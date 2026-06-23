@@ -139,7 +139,7 @@ export default function OverviewTab({ entries, cfg, oos, selected, onToggle, onS
       {/* Productivity Chart */}
       <div className="card">
         <div className="text-sm font-bold text-slate-700 mb-3">📊 Productivity% เปรียบเทียบทุก Ward</div>
-        <ProdBarChart data={chartData} />
+        <ProdBarChart data={chartData} cfg={cfg} shift={selShift} />
       </div>
 
       {/* RN:Pt Ratio Chart */}
