@@ -61,6 +61,23 @@ export default function BedAvailabilityTab() {
     return t
   }, [data])
 
+  // Quick contact list: wards with any free bed
+  const contactList = useMemo(() => {
+    return WARDS.map(w => {
+      const d = data[w.id]
+      if (!d) return { ward: w, status: 'none', total: 0, chips: [] }
+      const chips = FIELDS
+        .map(f => ({ ...f, n: d[f.key] || 0 }))
+        .filter(f => f.n > 0)
+      const total = chips.reduce((s, f) => s + f.n, 0)
+      return { ward: w, status: total > 0 ? 'free' : 'full', total, chips, remark: d.remark }
+    })
+  }, [data])
+
+  const available = contactList.filter(c => c.status === 'free')
+  const full      = contactList.filter(c => c.status === 'full')
+  const nodata    = contactList.filter(c => c.status === 'none')
+
   const fmtTime = ts => {
     if (!ts) return '—'
     try { return new Date(ts + 'Z').toLocaleString('th-TH', { hour12: false }) }
@@ -72,7 +89,7 @@ export default function BedAvailabilityTab() {
       {/* Totals across all wards */}
       <div className="card">
         <div className="text-sm font-bold text-slate-700 mb-3">🛏 สรุปเตียงว่างทุก Ward</div>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
           {FIELDS.map(f => (
             <div key={f.key} className="rounded-xl border px-3 py-3 text-center"
                  style={{ borderColor: f.color + '44', background: f.color + '0a' }}>
@@ -80,6 +97,60 @@ export default function BedAvailabilityTab() {
               <div className="text-2xl font-bold mt-1" style={{ color: f.color }}>{totals[f.key]}</div>
             </div>
           ))}
+        </div>
+
+        {/* Quick contact list */}
+        <div className="border-t border-slate-200 pt-3">
+          <div className="text-sm font-bold text-green-700 mb-2">🟢 ติดต่อได้เลย ({available.length} Ward)</div>
+          {available.length === 0 ? (
+            <div className="text-sm text-slate-400 italic">ยังไม่มี Ward ที่มีเตียงว่าง</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {available.map(c => (
+                <div key={c.ward.id} className="rounded-xl border border-green-200 bg-green-50/50 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-bold text-slate-800">{c.ward.name}</div>
+                    <div className="text-xs px-2 py-0.5 rounded-full bg-green-500 text-white font-bold">{c.total} เตียง</div>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {c.chips.map(f => (
+                      <span key={f.key} className="text-xs px-2 py-0.5 rounded font-semibold"
+                            style={{ background: f.color + '1a', color: f.color, border: `1px solid ${f.color}44` }}>
+                        {f.label} <b>{f.n}</b>
+                      </span>
+                    ))}
+                  </div>
+                  {c.remark && <div className="text-xs text-amber-600 mt-1.5">📝 {c.remark}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {full.length > 0 && (
+            <div className="mt-3">
+              <div className="text-xs font-bold text-red-600 mb-1.5">🔴 เต็มทุกประเภท</div>
+              <div className="flex flex-wrap gap-1.5">
+                {full.map(c => (
+                  <span key={c.ward.id} className="text-xs px-2 py-1 rounded-lg bg-red-50 text-red-700 border border-red-200 font-semibold">
+                    {c.ward.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {nodata.length > 0 && (
+            <div className="mt-3">
+              <div className="text-xs font-bold text-slate-400 mb-1.5">⚪ ยังไม่อัปเดตข้อมูล</div>
+              <div className="flex flex-wrap gap-1.5">
+                {nodata.map(c => (
+                  <span key={c.ward.id} className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-500 border border-slate-200">
+                    {c.ward.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
