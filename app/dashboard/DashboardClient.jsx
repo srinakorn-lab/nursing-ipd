@@ -99,7 +99,7 @@ export default function DashboardPage() {
           <NavTabs active={activeTab} onChange={setTab} />
           <div className="min-h-[calc(100vh-120px)]">
             {activeTab === 'overview'   && <OverviewTab   {...tabProps} year={selYear} month={selMonth} dataVersion={dataVersion} />}
-            {activeTab === 'table'      && <TableTab      {...tabProps} />}
+            {activeTab === 'table'      && <TableTab      {...tabProps} year={selYear} month={selMonth} dataVersion={dataVersion} />}
             {activeTab === 'chart'      && <ChartTab      cfg={cfg} oos={oos} year={selYear} month={selMonth} />}
             {activeTab === 'daily'      && <DailyTab      cfg={cfg} year={selYear} month={selMonth} onOpenDailyEdit={openDailyEdit} />}
             {activeTab === 'wardreport' && <WardReportTab cfg={cfg} year={selYear} month={selMonth} />}

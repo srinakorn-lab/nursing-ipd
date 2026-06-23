@@ -1,18 +1,38 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import StatusBadge from '../ui/StatusBadge'
 import WardChips from '../ui/WardChips'
 import { calcProd, prodStatus, getAvailBeds, calcPts } from '../../lib/calc'
-import { WARDS } from '../../lib/constants'
+import { WARDS, THAI_MONTHS } from '../../lib/constants'
+import { apiLoadDailyEntries, loadDailyEntries } from '../../lib/storage'
 
 const LV_COLORS = ['#93c5fd','#6ee7b7','#fcd34d','#fb923c','#f87171']
 
-export default function TableTab({ entries, cfg, oos, selected, onToggle, onSelectAll, onClearAll, onOpenOos }) {
+export default function TableTab({ cfg, oos, selected, onToggle, onSelectAll, onClearAll, onOpenOos, year, month, dataVersion = 0 }) {
   const [expanded, setExpanded] = useState(null)
+  const [selDay, setSelDay] = useState(1)
+  const [dailyAll, setDailyAll] = useState({})
+  const daysInMonth = new Date(year - 543, month, 0).getDate()
+
+  useEffect(() => { setSelDay(new Date().getDate()) }, [])
+
+  useEffect(() => {
+    async function load() {
+      const result = {}
+      await Promise.all(WARDS.map(async w => {
+        const local = loadDailyEntries(year, month, w.id)
+        const remote = await apiLoadDailyEntries(year, month, w.id)
+        const src = { ...local, ...(remote || {}) }
+        result[w.id] = src[selDay] || {}
+      }))
+      setDailyAll(result)
+    }
+    load()
+  }, [year, month, selDay, dataVersion])
 
   const wardData = useMemo(() => {
     return WARDS.filter(w => selected.includes(w.id)).map(w => {
-      const e = entries[w.id] || {}
+      const e  = dailyAll[w.id] || {}
       const de = e.day, ne = e.night
       const dProd = calcProd(de, w.type, cfg)
       const nProd = calcProd(ne, w.type, cfg)
@@ -27,7 +47,7 @@ export default function TableTab({ entries, cfg, oos, selected, onToggle, onSele
       return { ...w, de, ne, dProd, nProd, dPts, nPts, dRN, nRN, avail, bor, free, oosInfo, dRatio, nRatio,
         dStatus: prodStatus(dProd, cfg), nStatus: prodStatus(nProd, cfg) }
     })
-  }, [entries, cfg, oos, selected])
+  }, [dailyAll, cfg, oos, selected])
 
   const fmt = v => v != null ? `${v}%` : '—'
   const fmtN = v => v != null ? Math.round(v) : '—'
@@ -35,6 +55,17 @@ export default function TableTab({ entries, cfg, oos, selected, onToggle, onSele
   return (
     <div className="p-4 space-y-3">
       <WardChips selected={selected} onToggle={onToggle} onSelectAll={onSelectAll} onClearAll={onClearAll} />
+      <div className="card py-2.5 flex flex-wrap items-center gap-3" suppressHydrationWarning>
+        <button onClick={() => setSelDay(d => Math.max(1, d-1))}
+          className="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 font-bold text-sm">←</button>
+        <div className="text-sm font-bold text-slate-800">
+          📅 ข้อมูลวันที่ <span className="text-indigo-600">{selDay}</span> {THAI_MONTHS[month-1]} พ.ศ. {year}
+        </div>
+        <button onClick={() => setSelDay(d => Math.min(daysInMonth, d+1))}
+          className="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 font-bold text-sm">→</button>
+        <button onClick={() => setSelDay(new Date().getDate())}
+          className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">วันนี้</button>
+      </div>
       <div className="card p-0 overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
