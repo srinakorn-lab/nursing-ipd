@@ -6,10 +6,12 @@ import StatusBadge from '../ui/StatusBadge'
 import WardChips from '../ui/WardChips'
 import ProdBarChart from '../charts/ProdBarChart'
 import { calcProd, prodStatus, getAvailBeds, calcPts } from '../../lib/calc'
-import { WARDS, THAI_MONTHS } from '../../lib/constants'
+import { THAI_MONTHS } from '../../lib/constants'
 import { apiLoadDailyEntries, loadDailyEntries, dailyStorageKey } from '../../lib/storage'
+import { useWards } from '../../lib/hooks/useWards'
 
 export default function OverviewTab({ entries, cfg, oos, selected, onToggle, onSelectAll, onClearAll, year, month, dataVersion = 0 }) {
+  const WARDS = useWards()
   const [selDay, setSelDay] = useState(1)
   const [mounted, setMounted] = useState(false)
   const [selShift, setSelShift] = useState('day')
@@ -53,7 +55,7 @@ export default function OverviewTab({ entries, cfg, oos, selected, onToggle, onS
       return { ...w, de, ne, ae, dProd, nProd, aProd, dPts, nPts, aPts, aRN, avail, bor, free, aRatio, target,
         aStatus: prodStatus(aProd, cfg, selShift), dStatus: prodStatus(dProd, cfg, 'day'), nStatus: prodStatus(nProd, cfg, 'night'), hasDaily }
     })
-  }, [dailyAll, cfg, oos, selected, selShift])
+  }, [dailyAll, cfg, oos, selected, selShift, WARDS])
 
   const hasAnyData = wardData.some(w => w.ae)
   const totPts   = wardData.reduce((s, w) => s + w.aPts, 0)

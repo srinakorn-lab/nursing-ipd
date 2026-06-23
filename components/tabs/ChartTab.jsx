@@ -1,15 +1,13 @@
 'use client'
 import { useMemo, useState, useEffect } from 'react'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
-import { WARDS, THAI_MONTHS } from '../../lib/constants'
+import { THAI_MONTHS } from '../../lib/constants'
 import { loadDailyEntries, loadEntries, apiLoadDailyEntries, apiLoadEntries } from '../../lib/storage'
 import { calcProd, calcPts, getAvailBeds } from '../../lib/calc'
+import { useWards } from '../../lib/hooks/useWards'
 import ProdBarChart from '../charts/ProdBarChart'
 import BorBarChart from '../charts/BorBarChart'
 import DailyPcChart from '../charts/DailyPcChart'
-
-const WARD_WARDS = WARDS.filter(w => w.type === 'WARD')
-const ICU_WARDS  = WARDS.filter(w => w.type === 'ICU')
 
 const THAI_SHORT = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']
 
@@ -26,6 +24,9 @@ function calcGroup(rows, cfg, oos, shift = 'day') {
 }
 
 export default function ChartTab({ cfg, oos, year, month }) {
+  const WARDS = useWards()
+  const WARD_WARDS = useMemo(() => WARDS.filter(w => w.type === 'WARD'), [WARDS])
+  const ICU_WARDS  = useMemo(() => WARDS.filter(w => w.type === 'ICU'),  [WARDS])
   const [viewMode, setViewMode] = useState('daily')
   const [group, setGroup]       = useState('all')
   const [selDay, setSelDay]     = useState(() => new Date().getDate())
@@ -82,7 +83,7 @@ export default function ChartTab({ cfg, oos, year, month }) {
       setMonthlyData(result)
     }
     load()
-  }, [year, month, viewMode, cfg, oos, daysInMonth])
+  }, [year, month, viewMode, cfg, oos, daysInMonth, WARDS])
 
   // ── Yearly: each month of year ──────────────────────────────
   useEffect(() => {
@@ -111,7 +112,7 @@ export default function ChartTab({ cfg, oos, year, month }) {
       setYearlyData(result)
     }
     load()
-  }, [year, viewMode, cfg, oos])
+  }, [year, viewMode, cfg, oos, WARDS])
 
   // ── Level data per ward (daily view) ─────────────────────────
   const getLevelBars = (wards) => wards.map(w => {
@@ -139,7 +140,7 @@ export default function ChartTab({ cfg, oos, year, month }) {
       icu:  calcGroup(makeRows(ICU_WARDS),  cfg, oos),
       all:  calcGroup(makeRows(WARDS),       cfg, oos),
     }
-  }, [dailyWardData, cfg, oos])
+  }, [dailyWardData, cfg, oos, WARDS, WARD_WARDS, ICU_WARDS])
 
   // ── Shared chart components ───────────────────────────────────
   const GroupProdLine = ({ data, xKey }) => (

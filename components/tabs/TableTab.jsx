@@ -3,12 +3,14 @@ import { useMemo, useState, useEffect } from 'react'
 import StatusBadge from '../ui/StatusBadge'
 import WardChips from '../ui/WardChips'
 import { calcProd, prodStatus, getAvailBeds, calcPts } from '../../lib/calc'
-import { WARDS, THAI_MONTHS } from '../../lib/constants'
+import { THAI_MONTHS } from '../../lib/constants'
 import { apiLoadDailyEntries, loadDailyEntries } from '../../lib/storage'
+import { useWards } from '../../lib/hooks/useWards'
 
 const LV_COLORS = ['#93c5fd','#6ee7b7','#fcd34d','#fb923c','#f87171']
 
 export default function TableTab({ cfg, oos, selected, onToggle, onSelectAll, onClearAll, onOpenOos, year, month, dataVersion = 0 }) {
+  const WARDS = useWards()
   const [expanded, setExpanded] = useState(null)
   const [selDay, setSelDay] = useState(1)
   const [dailyAll, setDailyAll] = useState({})
@@ -47,7 +49,7 @@ export default function TableTab({ cfg, oos, selected, onToggle, onSelectAll, on
       return { ...w, de, ne, dProd, nProd, dPts, nPts, dRN, nRN, avail, bor, free, oosInfo, dRatio, nRatio,
         dStatus: prodStatus(dProd, cfg, 'day'), nStatus: prodStatus(nProd, cfg, 'night') }
     })
-  }, [dailyAll, cfg, oos, selected])
+  }, [dailyAll, cfg, oos, selected, WARDS])
 
   const fmt = v => v != null ? `${v}%` : '—'
   const fmtN = v => v != null ? Math.round(v) : '—'
