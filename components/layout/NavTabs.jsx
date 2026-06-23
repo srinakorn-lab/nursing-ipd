@@ -1,11 +1,13 @@
 'use client'
 const TABS = [
-  { id: 'overview', label: '🏢 Admin Overview' },
-  { id: 'table',    label: '📋 ตารางรายวอร์ด' },
-  { id: 'chart',    label: '📊 กราฟเปรียบเทียบ' },
-  { id: 'daily',    label: '📅 รายวัน' },
-  { id: 'report',   label: '📊 รายงาน' },
-  { id: 'settings', label: '⚙️ ตั้งค่า' },
+  { id: 'overview',   label: '🏢 Admin Overview' },
+  { id: 'table',      label: '📋 ตารางรายวอร์ด' },
+  { id: 'chart',      label: '📊 กราฟเปรียบเทียบ' },
+  { id: 'daily',      label: '📅 รายวัน' },
+  { id: 'wardreport', label: '🏥 รายงาน Ward' },
+  { id: 'beds',       label: '🛏 เตียงว่าง' },
+  { id: 'report',     label: '📊 รายงานรวม' },
+  { id: 'settings',   label: '⚙️ ตั้งค่า' },
 ]
 export default function NavTabs({ active, onChange }) {
   return (

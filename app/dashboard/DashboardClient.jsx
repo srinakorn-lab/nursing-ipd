@@ -15,6 +15,8 @@ import TableTab from '../../components/tabs/TableTab'
 import ChartTab from '../../components/tabs/ChartTab'
 import DailyTab from '../../components/tabs/DailyTab'
 import ReportTab from '../../components/tabs/ReportTab'
+import WardReportTab from '../../components/tabs/WardReportTab'
+import BedAvailabilityTab from '../../components/tabs/BedAvailabilityTab'
 import SettingsTab from '../../components/tabs/SettingsTab'
 import EntryModal from '../../components/modals/EntryModal'
 import OosModal from '../../components/modals/OosModal'
@@ -96,12 +98,14 @@ export default function DashboardPage() {
             onOpenEntry={() => openEntry()} />
           <NavTabs active={activeTab} onChange={setTab} />
           <div className="min-h-[calc(100vh-120px)]">
-            {activeTab === 'overview'  && <OverviewTab {...tabProps} year={selYear} month={selMonth} dataVersion={dataVersion} />}
-            {activeTab === 'table'     && <TableTab    {...tabProps} />}
-            {activeTab === 'chart'     && <ChartTab    cfg={cfg} oos={oos} year={selYear} month={selMonth} />}
-            {activeTab === 'daily'     && <DailyTab    cfg={cfg} year={selYear} month={selMonth} onOpenDailyEdit={openDailyEdit} />}
-            {activeTab === 'report'    && <ReportTab   cfg={cfg} year={selYear} month={selMonth} oos={oos} entries={entries} />}
-            {activeTab === 'settings'  && <SettingsTab cfg={cfg} onSaveCfg={saveCfg} />}
+            {activeTab === 'overview'   && <OverviewTab   {...tabProps} year={selYear} month={selMonth} dataVersion={dataVersion} />}
+            {activeTab === 'table'      && <TableTab      {...tabProps} />}
+            {activeTab === 'chart'      && <ChartTab      cfg={cfg} oos={oos} year={selYear} month={selMonth} />}
+            {activeTab === 'daily'      && <DailyTab      cfg={cfg} year={selYear} month={selMonth} onOpenDailyEdit={openDailyEdit} />}
+            {activeTab === 'wardreport' && <WardReportTab cfg={cfg} year={selYear} month={selMonth} />}
+            {activeTab === 'beds'       && <BedAvailabilityTab />}
+            {activeTab === 'report'     && <ReportTab     cfg={cfg} year={selYear} month={selMonth} oos={oos} entries={entries} />}
+            {activeTab === 'settings'   && <SettingsTab   cfg={cfg} onSaveCfg={saveCfg} />}
           </div>
         </div>
       </div>
