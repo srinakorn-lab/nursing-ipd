@@ -15,8 +15,10 @@ const THAI_SHORT = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.'
 
 function calcGroup(rows, cfg, oos, shift = 'day') {
   const prods = rows.map(r => calcProd(r.e[shift], r.w.type, cfg)).filter(p => p != null)
-  const availSum = rows.reduce((s, r) => s + getAvailBeds(r.w, oos), 0)
-  const ptsSum   = rows.reduce((s, r) => s + calcPts(r.e[shift]), 0)
+  // Only count beds from wards that have data for this shift
+  const withData = rows.filter(r => r.e[shift])
+  const availSum = withData.reduce((s, r) => s + getAvailBeds(r.w, oos), 0)
+  const ptsSum   = withData.reduce((s, r) => s + calcPts(r.e[shift]), 0)
   return {
     prod: prods.length ? +(prods.reduce((a, b) => a + b, 0) / prods.length).toFixed(1) : null,
     bor:  availSum > 0 && ptsSum > 0 ? +(ptsSum / availSum * 100).toFixed(1) : null,
