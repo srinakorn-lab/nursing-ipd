@@ -120,7 +120,12 @@ export default function WardReportTab({ cfg, year, month }) {
     let header, csvRows
     if (view === 'daily') {
       header = 'เวลาบันทึก,วัน,เวร,Lv1,Lv2,Lv3,Lv4,Lv5,ADM,TRF,ODS,RN,PN,NA,Pts,PROD%,Device\n'
-      csvRows = enriched.map(r =>
+      const sorted = [...enriched].sort((a, b) =>
+        (a.day ?? 0) - (b.day ?? 0) ||
+        a.shift.localeCompare(b.shift) ||
+        (a.saved_at || '').localeCompare(b.saved_at || '')
+      )
+      csvRows = sorted.map(r =>
         `${r.saved_at},${r.day ?? ''},${r.shift},${r.lv1},${r.lv2},${r.lv3},${r.lv4},${r.lv5},${r.adm},${r.trf},${r.ods},${r.rn},${r.pn},${r.na},${r._pts},${r._prod ?? ''},${r.device_id || ''}`
       ).join('\n')
     } else if (view === 'weekly') {

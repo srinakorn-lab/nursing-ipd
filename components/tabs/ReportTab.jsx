@@ -127,7 +127,15 @@ export default function ReportTab({ cfg, year, month }) {
       ).join('\n')
     } else {
       header = 'วันที่บันทึก,ปี,เดือน,วัน,Ward,เวร,Lv1,Lv2,Lv3,Lv4,Lv5,ADM,TRF,ODS,RN,PN,NA,Pts,PROD%,Device\n'
-      rowsCsv = enriched.map(r =>
+      const sorted = [...enriched].sort((a, b) =>
+        a.year - b.year ||
+        a.month - b.month ||
+        (a.day ?? 0) - (b.day ?? 0) ||
+        a.ward_id.localeCompare(b.ward_id) ||
+        a.shift.localeCompare(b.shift) ||
+        (a.saved_at || '').localeCompare(b.saved_at || '')
+      )
+      rowsCsv = sorted.map(r =>
         `${r.saved_at},${r.year},${r.month},${r.day ?? ''},${r.ward_id},${r.shift},${r.lv1},${r.lv2},${r.lv3},${r.lv4},${r.lv5},${r.adm},${r.trf},${r.ods},${r.rn},${r.pn},${r.na},${r._pts},${r._prod ?? ''},${r.device_id || ''}`
       ).join('\n')
     }
