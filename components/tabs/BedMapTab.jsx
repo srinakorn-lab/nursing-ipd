@@ -1,13 +1,14 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { useWards } from '../../lib/hooks/useWards'
-import { apiLoadBedsMap, apiSaveBed, apiMoveBed, apiClearBedsMapWard } from '../../lib/storage'
+import { apiLoadBedsMap, apiSaveBed, apiMoveBed, apiClearBedsMapWard, apiLoadConfig } from '../../lib/storage'
+import { getBedUnits } from '../../lib/bedLayout'
 import Modal from '../ui/Modal'
 
 const STATUS = {
-  empty:    { label: 'ว่าง',                color: '#16a34a', bg: '#dcfce7', border: '#86efac', icon: '⬜' },
-  occupied: { label: 'มีคนไข้',              color: '#dc2626', bg: '#fee2e2', border: '#fca5a5', icon: '🛌' },
-  cleaning: { label: 'รอเตรียมห้อง',         color: '#d97706', bg: '#fef3c7', border: '#fcd34d', icon: '🧹' },
+  empty:    { label: 'ว่าง',          color: '#16a34a', bg: '#dcfce7', border: '#86efac', icon: '⬜' },
+  occupied: { label: 'มีคนไข้',        color: '#dc2626', bg: '#fee2e2', border: '#fca5a5', icon: '🛌' },
+  cleaning: { label: 'รอเตรียมห้อง',   color: '#d97706', bg: '#fef3c7', border: '#fcd34d', icon: '🧹' },
 }
 
 const LV_COLOR = ['#93c5fd','#6ee7b7','#fcd34d','#fb923c','#f87171']
@@ -19,33 +20,79 @@ function dayDiff(iso) {
   return Math.max(0, Math.floor((end - start) / (1000*60*60*24)))
 }
 
+function BedCard({ unit, bed, isMoveSrc, onClick }) {
+  const s = STATUS[bed.status] || STATUS.empty
+  return (
+    <button onClick={onClick}
+      className={`text-left rounded-xl border-2 p-2 min-h-[74px] transition-all hover:shadow-md ${isMoveSrc ? 'ring-2 ring-indigo-400' : ''}`}
+      style={{ background: s.bg, borderColor: s.border }}>
+      <div className="flex items-center justify-between">
+        <div className="text-xs font-bold text-slate-600">{unit.code}</div>
+        <div className="text-sm">{s.icon}</div>
+      </div>
+      {bed.status === 'occupied' && (
+        <>
+          <div className="text-xs font-bold truncate mt-1" style={{ color: s.color }}>
+            {bed.name || bed.hn || '—'}
+          </div>
+          <div className="flex items-center gap-1 mt-0.5 text-[10px] text-slate-600">
+            {bed.sex && <span>{bed.sex === 'M' ? '♂' : '♀'}</span>}
+            {bed.level && (
+              <span className="px-1 rounded text-white font-bold"
+                style={{ background: LV_COLOR[bed.level - 1] }}>Lv{bed.level}</span>
+            )}
+            {bed.admitted_at && <span>{dayDiff(bed.admitted_at)}d</span>}
+          </div>
+        </>
+      )}
+      {bed.status === 'cleaning' && (
+        <div className="text-[10px] mt-1" style={{ color: s.color }}>รอเตรียมห้อง</div>
+      )}
+    </button>
+  )
+}
+
 export default function BedMapTab() {
   const WARDS = useWards()
   const [data, setData] = useState({})
+  const [layoutCfg, setLayoutCfg] = useState({})
   const [activeWard, setActiveWard] = useState(WARDS[0]?.id)
   const [reloadKey, setReloadKey] = useState(0)
   const [loading, setLoading] = useState(true)
 
-  // Modal state
   const [editingBed, setEditingBed] = useState(null)   // { ward, bedNo, bed }
   const [moveMode, setMoveMode] = useState(null)       // { fromWard, fromBed, bed }
 
   useEffect(() => {
     setLoading(true)
-    apiLoadBedsMap().then(d => { setData(d || {}); setLoading(false) })
+    Promise.all([apiLoadBedsMap(), apiLoadConfig('bed_layout')]).then(([d, layout]) => {
+      setData(d || {})
+      if (layout && typeof layout === 'object') setLayoutCfg(layout)
+      setLoading(false)
+    })
   }, [reloadKey])
 
   const activeWardObj = WARDS.find(w => w.id === activeWard)
 
-  // Compose beds for active ward: 1..N slots, merge with data
-  const activeBeds = useMemo(() => {
+  // Bed units for active ward (room codes) merged with D1 state
+  const activeUnits = useMemo(() => {
     if (!activeWardObj) return []
     const wd = data[activeWard] || {}
-    return Array.from({ length: activeWardObj.beds }, (_, i) => {
-      const n = i + 1
-      return wd[n] || { ward_id: activeWard, bed_no: n, status: 'empty' }
+    return getBedUnits(activeWardObj, layoutCfg).map(u => ({
+      ...u,
+      bed: wd[u.code] || { ward_id: activeWard, bed_no: u.code, status: 'empty' },
+    }))
+  }, [activeWard, activeWardObj, data, layoutCfg])
+
+  const singles = activeUnits.filter(u => !u.isShared)
+  const sharedRooms = useMemo(() => {
+    const map = {}
+    activeUnits.filter(u => u.isShared).forEach(u => {
+      if (!map[u.room]) map[u.room] = []
+      map[u.room].push(u)
     })
-  }, [activeWard, activeWardObj, data])
+    return map
+  }, [activeUnits])
 
   // Summary per ward for chips
   const summary = useMemo(() => {
@@ -53,35 +100,32 @@ export default function BedMapTab() {
     WARDS.forEach(w => {
       const wd = data[w.id] || {}
       const arr = Object.values(wd)
+      const total = getBedUnits(w, layoutCfg).length
       s[w.id] = {
+        total,
         occupied: arr.filter(b => b.status === 'occupied').length,
         cleaning: arr.filter(b => b.status === 'cleaning').length,
-        empty:    w.beds - arr.filter(b => b.status !== 'empty').length,
       }
     })
     return s
-  }, [WARDS, data])
+  }, [WARDS, data, layoutCfg])
 
   function pickWard(id) {
     setActiveWard(id)
-    setMoveMode(null)
   }
 
-  function onBedClick(bed) {
+  function onBedClick(unit) {
+    const bed = unit.bed
     if (moveMode) {
-      // Second click — destination
-      if (bed.status === 'occupied') {
-        alert('เตียงปลายทางไม่ว่าง')
+      if (bed.status === 'occupied') { alert('เตียงปลายทางไม่ว่าง'); return }
+      if (moveMode.fromWard === activeWard && moveMode.fromBed === unit.code) {
+        setMoveMode(null)
         return
       }
-      if (moveMode.fromWard === activeWard && moveMode.fromBed === bed.bed_no) {
-        setMoveMode(null)  // cancel
-        return
-      }
-      handleMove(moveMode.fromWard, moveMode.fromBed, activeWard, bed.bed_no)
+      handleMove(moveMode.fromWard, moveMode.fromBed, activeWard, unit.code)
       return
     }
-    setEditingBed({ ward: activeWard, bedNo: bed.bed_no, bed })
+    setEditingBed({ ward: activeWard, bedNo: unit.code, bed })
   }
 
   function startMove(bed) {
@@ -129,7 +173,7 @@ export default function BedMapTab() {
                 className={`px-3 py-1.5 rounded-lg border text-sm font-semibold transition-all ${active ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}>
                 {w.name}
                 <span className="ml-2 text-xs opacity-80">
-                  🛌 {s.occupied}/{w.beds}
+                  🛌 {s.occupied}/{s.total}
                   {s.cleaning > 0 && <span className="text-amber-500"> 🧹 {s.cleaning}</span>}
                 </span>
               </button>
@@ -143,8 +187,8 @@ export default function BedMapTab() {
         <div className="card bg-indigo-50 border-indigo-200">
           <div className="flex items-center gap-3">
             <div className="text-sm font-bold text-indigo-700 flex-1">
-              🔀 กำลังย้ายเตียง: {moveMode.bed.name || moveMode.bed.hn || 'ผู้ป่วย'} — จาก {moveMode.fromWard}#{moveMode.fromBed}
-              <div className="text-xs text-indigo-600 mt-0.5">คลิกเตียงว่างในหน้านี้เพื่อวางลง หรือเลือก Ward อื่นก่อน</div>
+              🔀 กำลังย้ายเตียง: {moveMode.bed.name || moveMode.bed.hn || 'ผู้ป่วย'} — จาก {moveMode.fromWard} {moveMode.fromBed}
+              <div className="text-xs text-indigo-600 mt-0.5">คลิกเตียงว่างเพื่อวางลง (เลือก Ward อื่นก่อนได้)</div>
             </div>
             <button onClick={() => setMoveMode(null)}
               className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
@@ -154,13 +198,13 @@ export default function BedMapTab() {
         </div>
       )}
 
-      {/* Ward header + legend */}
+      {/* Ward map */}
       <div className="card">
         <div className="flex items-center gap-3 mb-3 flex-wrap">
           <div className="text-lg font-bold text-slate-800 flex-1">
             {activeWardObj.name}
             {activeWardObj.type === 'ICU' && <span className="text-xs ml-2 px-2 py-0.5 rounded bg-purple-100 text-purple-700 font-semibold">ICU</span>}
-            <span className="text-sm text-slate-500 ml-2">รวม {activeWardObj.beds} เตียง</span>
+            <span className="text-sm text-slate-500 ml-2">รวม {activeUnits.length} เตียง</span>
           </div>
           <button onClick={handleClearWard}
             className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 font-semibold">
@@ -179,40 +223,30 @@ export default function BedMapTab() {
         {loading ? (
           <div className="text-center text-slate-400 py-8">⏳ กำลังโหลด...</div>
         ) : (
-          <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))' }}>
-            {activeBeds.map(bed => {
-              const s = STATUS[bed.status] || STATUS.empty
-              const isMoveSrc = moveMode && moveMode.fromWard === activeWard && moveMode.fromBed === bed.bed_no
-              return (
-                <button key={bed.bed_no} onClick={() => onBedClick(bed)}
-                  className={`text-left rounded-xl border-2 p-2 min-h-[74px] transition-all hover:shadow-md ${isMoveSrc ? 'ring-2 ring-indigo-400' : ''}`}
-                  style={{ background: s.bg, borderColor: s.border }}>
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs font-bold text-slate-500">#{bed.bed_no}</div>
-                    <div className="text-sm">{s.icon}</div>
-                  </div>
-                  {bed.status === 'occupied' && (
-                    <>
-                      <div className="text-xs font-bold truncate mt-1" style={{ color: s.color }}>
-                        {bed.name || bed.hn || '—'}
-                      </div>
-                      <div className="flex items-center gap-1 mt-0.5 text-[10px] text-slate-600">
-                        {bed.sex && <span>{bed.sex === 'M' ? '♂' : '♀'}</span>}
-                        {bed.level && (
-                          <span className="px-1 rounded text-white font-bold"
-                            style={{ background: LV_COLOR[bed.level - 1] }}>Lv{bed.level}</span>
-                        )}
-                        {bed.admitted_at && <span>{dayDiff(bed.admitted_at)}d</span>}
-                      </div>
-                    </>
-                  )}
-                  {bed.status === 'cleaning' && (
-                    <div className="text-[10px] mt-1" style={{ color: s.color }}>รอเตรียมห้อง</div>
-                  )}
-                </button>
-              )
-            })}
-          </div>
+          <>
+            {/* Single rooms */}
+            <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' }}>
+              {singles.map(u => (
+                <BedCard key={u.code} unit={u} bed={u.bed}
+                  isMoveSrc={moveMode && moveMode.fromWard === activeWard && moveMode.fromBed === u.code}
+                  onClick={() => onBedClick(u)} />
+              ))}
+            </div>
+
+            {/* Shared rooms */}
+            {Object.entries(sharedRooms).map(([room, units]) => (
+              <div key={room} className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/40 p-3">
+                <div className="text-sm font-bold text-indigo-700 mb-2">🏠 ห้องรวม {room} ({units.length} เตียง)</div>
+                <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' }}>
+                  {units.map(u => (
+                    <BedCard key={u.code} unit={u} bed={u.bed}
+                      isMoveSrc={moveMode && moveMode.fromWard === activeWard && moveMode.fromBed === u.code}
+                      onClick={() => onBedClick(u)} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </>
         )}
       </div>
 
@@ -223,8 +257,6 @@ export default function BedMapTab() {
     </div>
   )
 }
-
-const EMPTY_FORM = { wardId: '', bedNo: 0, status: 'empty', hn: '', name: '', sex: 'M', level: 1, admitted_at: '', remark: '' }
 
 function BedEditModal({ bed, onClose, onSave, onStartMove }) {
   const [form, setForm] = useState(() => {
@@ -242,7 +274,7 @@ function BedEditModal({ bed, onClose, onSave, onStartMove }) {
   })
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
 
-  const title = `${bed.ward} #${bed.bedNo}`
+  const title = `${bed.ward} — ${bed.bedNo}`
   const isOccupied = bed.bed.status === 'occupied'
   const isCleaning = bed.bed.status === 'cleaning'
 
@@ -275,46 +307,44 @@ function BedEditModal({ bed, onClose, onSave, onStartMove }) {
           </div>
         )}
 
-        {(!isCleaning) && (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">HN</label>
-                <input value={form.hn} onChange={e => set('hn', e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">ชื่อ - นามสกุล</label>
-                <input value={form.name} onChange={e => set('name', e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">เพศ</label>
-                <select value={form.sex} onChange={e => set('sex', e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm">
-                  <option value="M">ชาย</option>
-                  <option value="F">หญิง</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Level</label>
-                <select value={form.level} onChange={e => set('level', +e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm">
-                  {[1,2,3,4,5].map(n => <option key={n} value={n}>Lv.{n}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">วันที่รับเข้า</label>
-                <input type="date" value={form.admitted_at} onChange={e => set('admitted_at', e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">หมายเหตุ</label>
-                <input value={form.remark} onChange={e => set('remark', e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-              </div>
+        {!isCleaning && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">HN</label>
+              <input value={form.hn} onChange={e => set('hn', e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
             </div>
-          </>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">ชื่อ - นามสกุล</label>
+              <input value={form.name} onChange={e => set('name', e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">เพศ</label>
+              <select value={form.sex} onChange={e => set('sex', e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                <option value="M">ชาย</option>
+                <option value="F">หญิง</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Level</label>
+              <select value={form.level} onChange={e => set('level', +e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                {[1,2,3,4,5].map(n => <option key={n} value={n}>Lv.{n}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">วันที่รับเข้า</label>
+              <input type="date" value={form.admitted_at} onChange={e => set('admitted_at', e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">หมายเหตุ</label>
+              <input value={form.remark} onChange={e => set('remark', e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+          </div>
         )}
 
         <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-200">

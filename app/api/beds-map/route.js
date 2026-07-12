@@ -48,7 +48,7 @@ export async function POST(request) {
         level = excluded.level, admitted_at = excluded.admitted_at, remark = excluded.remark,
         updated_at = datetime('now')
     `).bind(
-      e.wardId, e.bedNo|0, status,
+      e.wardId, String(e.bedNo), status,
       clearFields ? null : (e.hn || null),
       clearFields ? null : (e.name || null),
       clearFields ? null : (e.sex || null),
@@ -61,7 +61,7 @@ export async function POST(request) {
       INSERT INTO beds_map_log (ward_id, bed_no, action, status, hn, name, sex, level, device_id)
       VALUES (?,?,?,?,?,?,?,?,?)
     `).bind(
-      e.wardId, e.bedNo|0, e.action || 'update', status,
+      e.wardId, String(e.bedNo), e.action || 'update', status,
       e.hn || null, e.name || null, e.sex || null, e.level ? +e.level : null, deviceId
     ).run()
 

@@ -1,7 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { DEFAULT_CFG, SETTINGS_PWD, WARDS } from '../../lib/constants'
-import { saveWardBeds, loadWardBeds } from '../../lib/storage'
+import { saveWardBeds, loadWardBeds, apiLoadConfig } from '../../lib/storage'
+import { WARD_ROOM_META, roomCode } from '../../lib/bedLayout'
 
 export default function SettingsTab({ cfg, onSaveCfg }) {
   const [unlocked, setUnlocked] = useState(false)
@@ -9,6 +10,8 @@ export default function SettingsTab({ cfg, onSaveCfg }) {
   const [form, setForm] = useState({})
   const [beds, setBeds] = useState({})
   const [bedsSaved, setBedsSaved] = useState(false)
+  const [layout, setLayout] = useState({})       // { wardId: { rooms: ['01','13'], bedsPerRoom: 6 } }
+  const [layoutSaved, setLayoutSaved] = useState(false)
 
   useEffect(() => {
     if (unlocked) {
@@ -17,6 +20,9 @@ export default function SettingsTab({ cfg, onSaveCfg }) {
       const b = {}
       WARDS.forEach(w => { b[w.id] = saved[w.id] ?? w.beds })
       setBeds(b)
+      apiLoadConfig('bed_layout').then(d => {
+        if (d && typeof d === 'object') setLayout(d)
+      })
     }
   }, [unlocked, cfg])
 
@@ -63,6 +69,31 @@ export default function SettingsTab({ cfg, onSaveCfg }) {
     saveWardBeds(data)
     setBedsSaved(true)
     setTimeout(() => setBedsSaved(false), 2000)
+  }
+
+  function setLayoutRooms(wardId, txt) {
+    // parse "01, 13" → ['01','13'], normalize to 2 digits
+    const rooms = txt.split(',').map(s => s.trim()).filter(Boolean)
+      .map(s => s.padStart(2, '0')).filter(s => /^\d{2}$/.test(s))
+    setLayout(l => ({ ...l, [wardId]: { ...l[wardId], rooms, _txt: txt } }))
+  }
+  function setLayoutBedsPerRoom(wardId, n) {
+    setLayout(l => ({ ...l, [wardId]: { ...l[wardId], bedsPerRoom: Math.max(2, +n || 6) } }))
+  }
+
+  async function handleSaveLayout() {
+    const clean = {}
+    Object.entries(layout).forEach(([wid, v]) => {
+      if (v?.rooms?.length) clean[wid] = { rooms: v.rooms, bedsPerRoom: v.bedsPerRoom || 6 }
+    })
+    localStorage.setItem('ipd_bed_layout', JSON.stringify(clean))
+    await fetch('/api/config/bed_layout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(clean),
+    }).catch(() => {})
+    setLayoutSaved(true)
+    setTimeout(() => setLayoutSaved(false), 2000)
   }
 
   function handleReset() {
@@ -222,6 +253,43 @@ export default function SettingsTab({ cfg, onSaveCfg }) {
               <div className={`text-xs mt-1 text-center font-semibold ${w.type === 'ICU' ? 'text-purple-500' : 'text-blue-500'}`}>{w.type}</div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Bed map layout: shared rooms */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-1">
+          <div className="text-xs font-bold text-slate-600 uppercase">🗺 ผังเตียง — ห้องรวม</div>
+          <button onClick={handleSaveLayout} className="text-xs px-3 py-1.5 rounded-lg text-white font-semibold" style={{ background: '#6366f1' }}>
+            {layoutSaved ? '✅ บันทึกแล้ว' : '💾 บันทึก'}
+          </button>
+        </div>
+        <div className="text-xs text-slate-400 mb-3">
+          แต่ละ Ward มี 25 ห้อง — ระบุเลขห้องที่เป็น "ห้องรวม" (คั่นด้วย , เช่น 01,13) ห้องรวมจะแตกเป็นเตียง /1 ถึง /N
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {WARDS.filter(w => WARD_ROOM_META[w.id]).map(w => {
+            const l = layout[w.id] || {}
+            const txt = l._txt ?? (l.rooms || []).join(',')
+            const preview = (l.rooms || []).map(r => roomCode(w.id, r)).join(', ')
+            return (
+              <div key={w.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <div className="text-xs font-bold text-slate-600 mb-1.5">
+                  {w.name} <span className="text-slate-400 font-normal">({roomCode(w.id, '01')} – {roomCode(w.id, '25')})</span>
+                </div>
+                <div className="flex gap-2">
+                  <input value={txt} placeholder="เช่น 01,13"
+                    onChange={e => setLayoutRooms(w.id, e.target.value)}
+                    className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-indigo-400" />
+                  <input type="number" min="2" max="12" value={l.bedsPerRoom ?? 6}
+                    onChange={e => setLayoutBedsPerRoom(w.id, e.target.value)}
+                    title="เตียงต่อห้องรวม"
+                    className="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:border-indigo-400" />
+                </div>
+                {preview && <div className="text-xs text-indigo-600 mt-1.5">🏠 {preview} × {l.bedsPerRoom ?? 6} เตียง</div>}
+              </div>
+            )
+          })}
         </div>
       </div>
     </div>
