@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useWards } from '../../lib/hooks/useWards'
 import { apiLoadBedsMap, apiLoadConfig } from '../../lib/storage'
-import { getBedUnits, bedCategoryField, ROOM_CATEGORIES } from '../../lib/bedLayout'
+import { getBedUnits, bedCategoryField, getRooms, roomSexOf, ROOM_CATEGORIES } from '../../lib/bedLayout'
 
 // Summary buckets — order & colors match room categories
 const FIELDS = ROOM_CATEGORIES.map(c => ({ key: c.field, label: c.label, color: c.color }))
@@ -65,6 +65,35 @@ export default function BedAvailabilityTab() {
     return { byField: t, total, occupied, cleaning, freeTotal }
   }, [WARDS, wardStats])
 
+  // Room-level summary (จำนวนห้อง: เดี่ยว/รวม/ชาย-หญิง/ฝากนอน)
+  const roomSummary = useMemo(() => {
+    const agg = { total: 0, single: 0, singleOccupied: 0, shared: 0, sharedMale: 0, sharedFemale: 0, sharedUnset: 0 }
+    const perWard = {}
+    WARDS.forEach(w => {
+      const wd = beds[w.id] || {}
+      const rooms = getRooms(w, layoutCfg)
+      const s = { total: 0, single: 0, singleOccupied: 0, shared: 0, sharedMale: 0, sharedFemale: 0, sharedUnset: 0 }
+      rooms.forEach(r => {
+        s.total++
+        if (r.isShared) {
+          s.shared++
+          const sx = roomSexOf(r.category)
+          if (sx === 'M') s.sharedMale++
+          else if (sx === 'F') s.sharedFemale++
+          else s.sharedUnset++
+        } else {
+          s.single++
+          // single room occupied = ฝากนอน (IPD รวมเต็ม)
+          const occ = r.beds.some(u => wd[u.code]?.status === 'occupied')
+          if (occ) s.singleOccupied++
+        }
+      })
+      perWard[w.id] = s
+      Object.keys(agg).forEach(k => { agg[k] += s[k] })
+    })
+    return { agg, perWard }
+  }, [WARDS, beds, layoutCfg])
+
   // Which wards contribute to each free-bed category
   const breakdown = useMemo(() => {
     const b = {}
@@ -95,6 +124,65 @@ export default function BedAvailabilityTab() {
           className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold">
           🔄 รีเฟรช
         </button>
+      </div>
+
+      {/* Room-level summary */}
+      <div className="card">
+        <div className="text-sm font-bold text-slate-700 mb-3">🚪 สรุปห้อง</div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {[
+            { label: 'ห้องทั้งหมด',  value: roomSummary.agg.total,        color: '#475569' },
+            { label: 'ห้องเดี่ยว',   value: roomSummary.agg.single,       color: '#0284c7' },
+            { label: 'ห้องรวม',      value: roomSummary.agg.shared,       color: '#6366f1' },
+            { label: 'รวมชาย',       value: roomSummary.agg.sharedMale,   color: '#2563eb' },
+            { label: 'รวมหญิง',      value: roomSummary.agg.sharedFemale, color: '#db2777' },
+            { label: 'ฝากนอนห้องเดี่ยว', sub: 'IPD รวมเต็ม', value: roomSummary.agg.singleOccupied, color: '#dc2626' },
+          ].map(c => (
+            <div key={c.label} className="rounded-xl border px-3 py-3 text-center"
+                 style={{ borderColor: c.color + '44', background: c.color + '0a' }}>
+              <div className="text-xs text-slate-500">{c.label}</div>
+              {c.sub && <div className="text-[10px] text-slate-400">{c.sub}</div>}
+              <div className="text-2xl font-bold mt-1" style={{ color: c.color }}>{c.value}</div>
+            </div>
+          ))}
+        </div>
+        {roomSummary.agg.sharedUnset > 0 && (
+          <div className="text-xs text-amber-600 mt-2">
+            ⚠️ มีห้องรวม {roomSummary.agg.sharedUnset} ห้องยังไม่กำหนดเพศ — ตั้งได้ในผังเตียง (🏷 ประเภทห้อง)
+          </div>
+        )}
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="text-left px-3 py-2 text-xs font-bold text-slate-500 uppercase">Ward</th>
+                <th className="px-2 py-2 text-xs font-bold text-slate-500 uppercase">ห้องทั้งหมด</th>
+                <th className="px-2 py-2 text-xs font-bold text-sky-600 uppercase">เดี่ยว</th>
+                <th className="px-2 py-2 text-xs font-bold text-indigo-500 uppercase">รวม</th>
+                <th className="px-2 py-2 text-xs font-bold text-blue-600 uppercase">รวมชาย</th>
+                <th className="px-2 py-2 text-xs font-bold text-pink-600 uppercase">รวมหญิง</th>
+                <th className="px-2 py-2 text-xs font-bold text-red-600 uppercase">ฝากนอนเดี่ยว</th>
+              </tr>
+            </thead>
+            <tbody>
+              {WARDS.map(w => {
+                const s = roomSummary.perWard[w.id]
+                if (!s) return null
+                return (
+                  <tr key={w.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="px-3 py-1.5 font-bold text-slate-800">{w.name}</td>
+                    <td className="px-2 py-1.5 text-center text-slate-600">{s.total}</td>
+                    <td className="px-2 py-1.5 text-center font-semibold text-sky-600">{s.single || '—'}</td>
+                    <td className="px-2 py-1.5 text-center font-semibold text-indigo-600">{s.shared || '—'}</td>
+                    <td className="px-2 py-1.5 text-center font-semibold text-blue-600">{s.sharedMale || '—'}</td>
+                    <td className="px-2 py-1.5 text-center font-semibold text-pink-600">{s.sharedFemale || '—'}</td>
+                    <td className="px-2 py-1.5 text-center font-semibold text-red-600">{s.singleOccupied || '—'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Free-bed category cards */}
