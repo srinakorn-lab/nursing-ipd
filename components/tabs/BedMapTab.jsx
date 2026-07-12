@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useWards } from '../../lib/hooks/useWards'
 import { apiLoadBedsMap, apiSaveBed, apiMoveBed, apiClearBedsMapWard, apiLoadConfig } from '../../lib/storage'
-import { getBedUnits, WARD_ROOM_META } from '../../lib/bedLayout'
+import { getBedUnits, WARD_ROOM_META, ROOM_CATEGORIES, CATEGORY_BY_KEY } from '../../lib/bedLayout'
 import Modal from '../ui/Modal'
 
 const STATUS = {
@@ -39,6 +39,11 @@ function BedCard({ unit, bed, isMoveSrc, onClick }) {
         <div className="text-xs font-bold text-slate-600">{unit.code}</div>
         <div className="text-sm">{sx ? sx.icon : s.icon}</div>
       </div>
+      {unit.category && CATEGORY_BY_KEY[unit.category] && (
+        <div className="text-[9px] font-semibold truncate" style={{ color: CATEGORY_BY_KEY[unit.category].color }}>
+          🏷 {CATEGORY_BY_KEY[unit.category].label}
+        </div>
+      )}
       {unit.label && (
         <div className="text-[9px] text-purple-600 font-semibold truncate">{unit.label}</div>
       )}
@@ -76,6 +81,7 @@ export default function BedMapTab() {
   const [moveMode, setMoveMode] = useState(null)       // { fromWard, fromBed, bed }
   const [splitModal, setSplitModal] = useState(null)   // { roomNum, code }
   const [extraModal, setExtraModal] = useState(false)
+  const [typeModal, setTypeModal] = useState(null)     // { roomNum, room, current }
 
   useEffect(() => {
     setLoading(true)
@@ -177,6 +183,15 @@ export default function BedMapTab() {
       [activeWard]: { ...wl, extraBeds: [...(wl.extraBeds || []), { code: String(code), label: label || '' }] },
     })
     setExtraModal(false)
+  }
+
+  function setRoomType(roomNum, category) {
+    const wl = layoutCfg[activeWard] || {}
+    const rt = { ...(wl.roomTypes || {}) }
+    if (category) rt[roomNum] = category
+    else delete rt[roomNum]
+    saveLayoutCfg({ ...layoutCfg, [activeWard]: { ...wl, roomTypes: rt } })
+    setTypeModal(null)
   }
 
   function removeExtraBed(code) {
@@ -392,6 +407,7 @@ export default function BedMapTab() {
           onSave={handleSaveBed} onStartMove={startMove}
           canSplit={isRoomWard && !editingBed.unit.isShared && !editingBed.unit.isExtra && editingBed.bed.status === 'empty'}
           onSplit={() => { setSplitModal({ roomNum: editingBed.unit.roomNum, code: editingBed.unit.room }); setEditingBed(null) }}
+          onSetType={() => { setTypeModal({ roomNum: editingBed.unit.roomNum, room: editingBed.unit.room, current: editingBed.unit.category || '' }); setEditingBed(null) }}
           onRemoveExtra={editingBed.unit.isExtra ? () => removeExtraBed(editingBed.unit.code) : null} />
       )}
 
@@ -400,6 +416,9 @@ export default function BedMapTab() {
       )}
       {extraModal && (
         <ExtraBedModal ward={activeWardObj} onClose={() => setExtraModal(false)} onConfirm={addExtraBed} />
+      )}
+      {typeModal && (
+        <RoomTypeModal room={typeModal} onClose={() => setTypeModal(null)} onConfirm={setRoomType} />
       )}
     </div>
   )
@@ -467,8 +486,41 @@ function ExtraBedModal({ ward, onClose, onConfirm }) {
   )
 }
 
+// ── Room type modal ───────────────────────────────────────────────
+function RoomTypeModal({ room, onClose, onConfirm }) {
+  const [cat, setCat] = useState(room.current || '')
+  return (
+    <Modal open={true} onClose={onClose} title={`🏷 ประเภทห้อง — ${room.room}`} maxWidth="420px">
+      <div className="space-y-3">
+        <div className="text-xs text-slate-500">
+          กำหนดประเภทห้องเพื่อให้ "สรุปเตียงว่าง" นับเตียงว่างของห้องนี้เข้าหมวดที่ถูกต้อง
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={() => setCat('')}
+            className={`text-sm px-3 py-2 rounded-lg border font-semibold text-left ${cat === '' ? 'border-slate-500 bg-slate-100' : 'border-slate-200 hover:bg-slate-50'}`}>
+            ⬜ ห้องเดี่ยว (ค่าเริ่มต้น)
+          </button>
+          {ROOM_CATEGORIES.filter(c => c.key !== 'single').map(c => (
+            <button key={c.key} onClick={() => setCat(c.key)}
+              className={`text-sm px-3 py-2 rounded-lg border font-semibold text-left ${cat === c.key ? 'bg-opacity-10' : 'border-slate-200 hover:bg-slate-50'}`}
+              style={cat === c.key ? { borderColor: c.color, background: c.color + '1a', color: c.color } : {}}>
+              🏷 {c.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2 justify-end pt-2 border-t border-slate-200">
+          <button onClick={onClose}
+            className="text-sm px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">ยกเลิก</button>
+          <button onClick={() => onConfirm(room.roomNum, cat)}
+            className="text-sm px-4 py-2 rounded-lg bg-teal-500 text-white font-semibold hover:bg-teal-600">✅ บันทึก</button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 // ── Bed edit modal ────────────────────────────────────────────────
-function BedEditModal({ bed, onClose, onSave, onStartMove, canSplit, onSplit, onRemoveExtra }) {
+function BedEditModal({ bed, onClose, onSave, onStartMove, canSplit, onSplit, onSetType, onRemoveExtra }) {
   const [form, setForm] = useState(() => {
     const today = new Date().toISOString().slice(0, 10)
     return {
@@ -568,6 +620,12 @@ function BedEditModal({ bed, onClose, onSave, onStartMove, canSplit, onSplit, on
             <button onClick={onSplit}
               className="text-sm px-4 py-2 rounded-lg border border-indigo-300 text-indigo-600 font-semibold hover:bg-indigo-50">
               🏠 แตกห้องรวม
+            </button>
+          )}
+          {onSetType && (
+            <button onClick={onSetType}
+              className="text-sm px-4 py-2 rounded-lg border border-teal-300 text-teal-600 font-semibold hover:bg-teal-50">
+              🏷 ประเภทห้อง
             </button>
           )}
           {onRemoveExtra && !isOccupied && !isCleaning && (

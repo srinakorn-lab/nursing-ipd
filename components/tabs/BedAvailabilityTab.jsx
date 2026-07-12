@@ -1,113 +1,111 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
-import { WARDS } from '../../lib/constants'
-import { apiLoadBeds, saveBeds, apiLoadBedsHistory, deleteAllBeds, deleteBedsForWard, deleteBedRecord } from '../../lib/storage'
+import { useWards } from '../../lib/hooks/useWards'
+import { apiLoadBedsMap, apiLoadConfig } from '../../lib/storage'
+import { getBedUnits, bedCategoryField, ROOM_CATEGORIES } from '../../lib/bedLayout'
 
-const FIELDS = [
-  { key: 'single_free',    label: 'ห้องว่างเดี่ยว', color: '#0284c7' },
-  { key: 'male_free',      label: 'รวมชาย',         color: '#2563eb' },
-  { key: 'female_free',    label: 'รวมหญิง',        color: '#db2777' },
-  { key: 'monitor_male',   label: 'Monitor รวมชาย',  color: '#7c3aed' },
-  { key: 'monitor_female', label: 'Monitor รวมหญิง', color: '#c026d3' },
-  { key: 'child_free',     label: 'ว่างเด็ก',        color: '#0d9488' },
-  { key: 'adult_free',     label: 'ว่างผู้ใหญ่',     color: '#ca8a04' },
-]
-
-const EMPTY_ENTRY = { wardId: WARDS[0].id, single_free: 0, male_free: 0, female_free: 0, monitor_male: 0, monitor_female: 0, child_free: 0, adult_free: 0, remark: '' }
+// Summary buckets — order & colors match room categories
+const FIELDS = ROOM_CATEGORIES.map(c => ({ key: c.field, label: c.label, color: c.color }))
 
 export default function BedAvailabilityTab() {
-  const [data, setData] = useState({})
-  const [form, setForm] = useState(EMPTY_ENTRY)
-  const [history, setHistory] = useState([])
-  const [showHistory, setShowHistory] = useState(false)
+  const WARDS = useWards()
+  const [beds, setBeds] = useState({})       // beds_map: { wardId: { bedCode: bed } }
+  const [layoutCfg, setLayoutCfg] = useState({})
   const [loading, setLoading] = useState(true)
   const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     setLoading(true)
-    apiLoadBeds().then(d => { setData(d || {}); setLoading(false) })
+    Promise.all([apiLoadBedsMap(), apiLoadConfig('bed_layout')]).then(([b, layout]) => {
+      setBeds(b || {})
+      if (layout && typeof layout === 'object') setLayoutCfg(layout)
+      setLoading(false)
+    })
   }, [reloadKey])
 
-  useEffect(() => {
-    if (showHistory) {
-      apiLoadBedsHistory(form.wardId, 50).then(setHistory)
-    }
-  }, [showHistory, form.wardId, reloadKey])
+  // Per-ward computed stats from bed map
+  const wardStats = useMemo(() => {
+    const stats = {}
+    WARDS.forEach(w => {
+      const wd = beds[w.id] || {}
+      const units = getBedUnits(w, layoutCfg)
+      const free = {}   // field → count
+      FIELDS.forEach(f => { free[f.key] = 0 })
+      let total = 0, occupied = 0, cleaning = 0, male = 0, female = 0
+      units.forEach(u => {
+        total++
+        const bed = wd[u.code]
+        const status = bed?.status || 'empty'
+        if (status === 'occupied') {
+          occupied++
+          if (bed.sex === 'M') male++
+          else if (bed.sex === 'F') female++
+        } else if (status === 'cleaning') {
+          cleaning++
+        } else {
+          free[bedCategoryField(u)]++
+        }
+      })
+      stats[w.id] = { total, occupied, cleaning, male, female, freeTotal: total - occupied - cleaning, free }
+    })
+    return stats
+  }, [WARDS, beds, layoutCfg])
 
-  function setF(k, v) { setForm(f => ({ ...f, [k]: v })) }
-  function setN(k, v) { setForm(f => ({ ...f, [k]: Math.max(0, +v || 0) })) }
-
-  async function handleSave() {
-    await saveBeds(form)
-    setForm(EMPTY_ENTRY)
-    setReloadKey(k => k + 1)
-  }
-
-  async function handleClearAll() {
-    if (!confirm('⚠️ ลบข้อมูลเตียงว่างทั้งหมดทุก Ward (รวมประวัติ)? — ไม่สามารถกู้คืนได้')) return
-    await deleteAllBeds()
-    setReloadKey(k => k + 1)
-  }
-
-  async function handleClearWard(ward) {
-    if (!confirm(`ลบข้อมูลเตียงว่างทั้งหมดของ ${ward} (รวมประวัติ)?`)) return
-    await deleteBedsForWard(ward)
-    setReloadKey(k => k + 1)
-  }
-
-  async function handleDeleteRecord(id) {
-    if (!confirm('ลบ record นี้?')) return
-    await deleteBedRecord(id)
-    setReloadKey(k => k + 1)
-  }
-
-  function pickWard(wardId) {
-    const last = data[wardId]
-    if (last) {
-      const next = { wardId, remark: last.remark || '' }
-      FIELDS.forEach(f => { next[f.key] = last[f.key] || 0 })
-      setForm(next)
-    } else {
-      setForm({ ...EMPTY_ENTRY, wardId })
-    }
-  }
-
+  // Totals across all wards
   const totals = useMemo(() => {
     const t = {}
     FIELDS.forEach(f => { t[f.key] = 0 })
-    Object.values(data).forEach(d => FIELDS.forEach(f => { t[f.key] += d[f.key] || 0 }))
-    return t
-  }, [data])
+    let total = 0, occupied = 0, cleaning = 0, freeTotal = 0
+    WARDS.forEach(w => {
+      const s = wardStats[w.id]
+      if (!s) return
+      FIELDS.forEach(f => { t[f.key] += s.free[f.key] })
+      total += s.total; occupied += s.occupied; cleaning += s.cleaning; freeTotal += s.freeTotal
+    })
+    return { byField: t, total, occupied, cleaning, freeTotal }
+  }, [WARDS, wardStats])
 
-  // Per-field breakdown: which wards contribute to each bed type
+  // Which wards contribute to each free-bed category
   const breakdown = useMemo(() => {
     const b = {}
     FIELDS.forEach(f => {
       b[f.key] = WARDS
-        .filter(w => (data[w.id]?.[f.key] || 0) > 0)
-        .map(w => ({ name: w.name, n: data[w.id][f.key] }))
+        .filter(w => (wardStats[w.id]?.free[f.key] || 0) > 0)
+        .map(w => ({ name: w.name, n: wardStats[w.id].free[f.key] }))
     })
     return b
-  }, [data])
-
-
-  const fmtTime = ts => {
-    if (!ts) return '—'
-    try { return new Date(ts + 'Z').toLocaleString('th-TH', { hour12: false }) }
-    catch { return ts }
-  }
+  }, [WARDS, wardStats])
 
   return (
     <div className="p-4 space-y-4">
-      {/* Totals across all wards */}
+      {/* Header note */}
+      <div className="card py-3 flex items-center gap-3 flex-wrap">
+        <div className="text-sm font-bold text-slate-700 flex-1">
+          🛏 สรุปเตียงว่าง — อ้างอิงตามผังเตียงอัตโนมัติ
+          <div className="text-xs text-slate-400 font-normal mt-0.5">
+            นับจากเตียงจริงในผังเตียง · กำหนดประเภทห้องได้ในหน้า "🗺 ผังเตียง" (🏷 ประเภทห้อง)
+          </div>
+        </div>
+        <div className="text-xs font-semibold text-slate-600 bg-slate-100 rounded-lg px-3 py-1.5">
+          🛌 <b className="text-red-600">{totals.occupied}</b> / {totals.total}
+          · ว่าง <b className="text-green-600">{totals.freeTotal}</b>
+          {totals.cleaning > 0 && <span className="text-amber-600"> · 🧹 {totals.cleaning}</span>}
+        </div>
+        <button onClick={() => setReloadKey(k => k + 1)}
+          className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold">
+          🔄 รีเฟรช
+        </button>
+      </div>
+
+      {/* Free-bed category cards */}
       <div className="card">
-        <div className="text-sm font-bold text-slate-700 mb-3">🛏 สรุปเตียงว่างทุก Ward</div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-4">
+        <div className="text-sm font-bold text-slate-700 mb-3">เตียงว่างตามประเภท {loading && <span className="text-xs text-slate-400">⏳</span>}</div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
           {FIELDS.map(f => (
             <div key={f.key} className="rounded-xl border px-3 py-3"
                  style={{ borderColor: f.color + '44', background: f.color + '0a' }}>
               <div className="text-xs text-slate-500 text-center">{f.label}</div>
-              <div className="text-2xl font-bold mt-1 text-center" style={{ color: f.color }}>{totals[f.key]}</div>
+              <div className="text-2xl font-bold mt-1 text-center" style={{ color: f.color }}>{totals.byField[f.key]}</div>
               {breakdown[f.key].length > 0 && (
                 <div className="mt-2 pt-2 border-t space-y-0.5" style={{ borderColor: f.color + '33' }}>
                   {breakdown[f.key].map(w => (
@@ -121,139 +119,49 @@ export default function BedAvailabilityTab() {
             </div>
           ))}
         </div>
-
       </div>
 
-      {/* Per-ward summary table */}
+      {/* Per-ward table */}
       <div className="card p-0 overflow-x-auto">
-        <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
-          <div className="text-sm font-bold text-slate-700 flex-1">รายแผนก (snapshot ล่าสุด)</div>
-          {loading && <span className="text-xs text-slate-400">⏳ โหลด...</span>}
-          <button onClick={handleClearAll}
-            className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 font-semibold">
-            🗑 ล้างข้อมูลทั้งหมด
-          </button>
-        </div>
+        <div className="px-4 py-3 border-b border-slate-200 text-sm font-bold text-slate-700">รายแผนก</div>
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">
               <th className="text-left px-4 py-2.5 text-xs font-bold text-slate-500 uppercase">Ward</th>
+              <th className="px-3 py-2.5 text-xs font-bold text-slate-500 uppercase">ทั้งหมด</th>
+              <th className="px-3 py-2.5 text-xs font-bold text-blue-500 uppercase">♂ ชาย</th>
+              <th className="px-3 py-2.5 text-xs font-bold text-pink-500 uppercase">♀ หญิง</th>
+              <th className="px-3 py-2.5 text-xs font-bold text-amber-500 uppercase">🧹 เตรียม</th>
+              <th className="px-3 py-2.5 text-xs font-bold text-green-600 uppercase">ว่างรวม</th>
               {FIELDS.map(f => (
-                <th key={f.key} className="px-3 py-2.5 text-xs font-bold uppercase" style={{ color: f.color }}>{f.label}</th>
+                <th key={f.key} className="px-2 py-2.5 text-xs font-bold uppercase" style={{ color: f.color }}>{f.label}</th>
               ))}
-              <th className="px-3 py-2.5 text-xs font-bold text-slate-500 uppercase">อัปเดตล่าสุด</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {WARDS.map(w => {
-              const d = data[w.id]
+              const s = wardStats[w.id]
+              if (!s) return null
               return (
                 <tr key={w.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-4 py-2 font-bold text-slate-800">{w.name}</td>
+                  <td className="px-3 py-2 text-center text-slate-600">{s.total}</td>
+                  <td className="px-3 py-2 text-center font-semibold text-blue-600">{s.male || '—'}</td>
+                  <td className="px-3 py-2 text-center font-semibold text-pink-600">{s.female || '—'}</td>
+                  <td className="px-3 py-2 text-center font-semibold text-amber-600">{s.cleaning || '—'}</td>
+                  <td className="px-3 py-2 text-center font-bold text-green-600">{s.freeTotal}</td>
                   {FIELDS.map(f => (
-                    <td key={f.key} className="px-3 py-2 text-center font-semibold"
-                        style={{ color: d ? f.color : '#cbd5e1' }}>
-                      {d ? (d[f.key] || 0) : '—'}
+                    <td key={f.key} className="px-2 py-2 text-center font-semibold"
+                        style={{ color: s.free[f.key] > 0 ? f.color : '#cbd5e1' }}>
+                      {s.free[f.key] || '—'}
                     </td>
                   ))}
-                  <td className="px-3 py-2 text-center text-xs text-slate-500">{fmtTime(d?.saved_at)}</td>
-                  <td className="px-3 py-2 text-center">
-                    <div className="flex gap-1 justify-center">
-                      <button onClick={() => pickWard(w.id)}
-                        className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-100">
-                        📝 แก้
-                      </button>
-                      {d && (
-                        <button onClick={() => handleClearWard(w.id)}
-                          className="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50">
-                          🗑
-                        </button>
-                      )}
-                    </div>
-                  </td>
                 </tr>
               )
             })}
           </tbody>
         </table>
       </div>
-
-      {/* Entry form */}
-      <div className="card">
-        <div className="text-sm font-bold text-slate-700 mb-3">+ ลงข้อมูลเตียงว่าง</div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">แผนก</label>
-            <select value={form.wardId} onChange={e => pickWard(e.target.value)}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400">
-              {WARDS.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-          </div>
-          {FIELDS.map(f => (
-            <div key={f.key}>
-              <label className="block text-xs font-semibold uppercase mb-1" style={{ color: f.color }}>{f.label}</label>
-              <input type="number" min="0" value={form[f.key]}
-                onChange={e => setN(f.key, e.target.value)}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400" />
-            </div>
-          ))}
-          <div className="sm:col-span-3">
-            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">หมายเหตุ</label>
-            <input type="text" value={form.remark}
-              onChange={e => setF('remark', e.target.value)}
-              placeholder="เช่น ห้อง 501 ปิดปรับปรุง"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400" />
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 mt-4">
-          <button onClick={() => setShowHistory(s => !s)}
-            className="text-sm px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50">
-            {showHistory ? '⬆️ ซ่อนประวัติ' : '📜 ดูประวัติ'}
-          </button>
-          <button onClick={handleSave}
-            className="text-sm px-5 py-2 rounded-lg bg-indigo-500 text-white font-semibold hover:bg-indigo-600">
-            💾 บันทึก
-          </button>
-        </div>
-      </div>
-
-      {/* History */}
-      {showHistory && (
-        <div className="card p-0 overflow-x-auto">
-          <div className="px-4 py-2.5 border-b border-slate-200 text-sm font-bold text-slate-700">
-            📜 ประวัติ {WARDS.find(w => w.id === form.wardId)?.name} ({history.length} record)
-          </div>
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left px-3 py-2 text-slate-500 font-bold uppercase">เวลา</th>
-                {FIELDS.map(f => <th key={f.key} className="px-2 py-2 font-bold uppercase" style={{ color: f.color }}>{f.label}</th>)}
-                <th className="text-left px-3 py-2 text-slate-500 font-bold">หมายเหตุ</th>
-                <th className="px-2 py-2 text-slate-500 font-bold">Device</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {history.map(r => (
-                <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="px-3 py-1.5 whitespace-nowrap text-slate-600">{fmtTime(r.saved_at)}</td>
-                  {FIELDS.map(f => <td key={f.key} className="px-2 py-1.5 text-center">{r[f.key] || 0}</td>)}
-                  <td className="px-3 py-1.5 text-slate-500">{r.remark || ''}</td>
-                  <td className="px-2 py-1.5 text-slate-400 text-[10px]">{r.device_id?.slice(0,8) || ''}</td>
-                  <td className="px-2 py-1.5 text-center">
-                    <button onClick={() => handleDeleteRecord(r.id)}
-                      className="text-xs text-red-500 hover:text-red-700">🗑</button>
-                  </td>
-                </tr>
-              ))}
-              {history.length === 0 && (
-                <tr><td colSpan={9} className="text-center text-slate-400 py-6">ยังไม่มีประวัติ</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   )
 }
