@@ -1,0 +1,358 @@
+'use client'
+import { useState, useEffect, useMemo } from 'react'
+import { useWards } from '../../lib/hooks/useWards'
+import { apiLoadBedsMap, apiSaveBed, apiMoveBed, apiClearBedsMapWard } from '../../lib/storage'
+import Modal from '../ui/Modal'
+
+const STATUS = {
+  empty:    { label: 'ว่าง',                color: '#16a34a', bg: '#dcfce7', border: '#86efac', icon: '⬜' },
+  occupied: { label: 'มีคนไข้',              color: '#dc2626', bg: '#fee2e2', border: '#fca5a5', icon: '🛌' },
+  cleaning: { label: 'รอเตรียมห้อง',         color: '#d97706', bg: '#fef3c7', border: '#fcd34d', icon: '🧹' },
+}
+
+const LV_COLOR = ['#93c5fd','#6ee7b7','#fcd34d','#fb923c','#f87171']
+
+function dayDiff(iso) {
+  if (!iso) return 0
+  const start = new Date(iso)
+  const end   = new Date()
+  return Math.max(0, Math.floor((end - start) / (1000*60*60*24)))
+}
+
+export default function BedMapTab() {
+  const WARDS = useWards()
+  const [data, setData] = useState({})
+  const [activeWard, setActiveWard] = useState(WARDS[0]?.id)
+  const [reloadKey, setReloadKey] = useState(0)
+  const [loading, setLoading] = useState(true)
+
+  // Modal state
+  const [editingBed, setEditingBed] = useState(null)   // { ward, bedNo, bed }
+  const [moveMode, setMoveMode] = useState(null)       // { fromWard, fromBed, bed }
+
+  useEffect(() => {
+    setLoading(true)
+    apiLoadBedsMap().then(d => { setData(d || {}); setLoading(false) })
+  }, [reloadKey])
+
+  const activeWardObj = WARDS.find(w => w.id === activeWard)
+
+  // Compose beds for active ward: 1..N slots, merge with data
+  const activeBeds = useMemo(() => {
+    if (!activeWardObj) return []
+    const wd = data[activeWard] || {}
+    return Array.from({ length: activeWardObj.beds }, (_, i) => {
+      const n = i + 1
+      return wd[n] || { ward_id: activeWard, bed_no: n, status: 'empty' }
+    })
+  }, [activeWard, activeWardObj, data])
+
+  // Summary per ward for chips
+  const summary = useMemo(() => {
+    const s = {}
+    WARDS.forEach(w => {
+      const wd = data[w.id] || {}
+      const arr = Object.values(wd)
+      s[w.id] = {
+        occupied: arr.filter(b => b.status === 'occupied').length,
+        cleaning: arr.filter(b => b.status === 'cleaning').length,
+        empty:    w.beds - arr.filter(b => b.status !== 'empty').length,
+      }
+    })
+    return s
+  }, [WARDS, data])
+
+  function pickWard(id) {
+    setActiveWard(id)
+    setMoveMode(null)
+  }
+
+  function onBedClick(bed) {
+    if (moveMode) {
+      // Second click — destination
+      if (bed.status === 'occupied') {
+        alert('เตียงปลายทางไม่ว่าง')
+        return
+      }
+      if (moveMode.fromWard === activeWard && moveMode.fromBed === bed.bed_no) {
+        setMoveMode(null)  // cancel
+        return
+      }
+      handleMove(moveMode.fromWard, moveMode.fromBed, activeWard, bed.bed_no)
+      return
+    }
+    setEditingBed({ ward: activeWard, bedNo: bed.bed_no, bed })
+  }
+
+  function startMove(bed) {
+    setMoveMode({ fromWard: activeWard, fromBed: bed.bed_no, bed })
+    setEditingBed(null)
+  }
+
+  async function handleMove(fromWard, fromBed, toWard, toBed) {
+    const res = await apiMoveBed(fromWard, fromBed, toWard, toBed)
+    if (res.ok) {
+      setMoveMode(null)
+      setReloadKey(k => k + 1)
+    } else {
+      alert(res.error || 'ย้ายไม่สำเร็จ')
+    }
+  }
+
+  async function handleSaveBed(form) {
+    const ok = await apiSaveBed(form)
+    if (ok) {
+      setEditingBed(null)
+      setReloadKey(k => k + 1)
+    }
+  }
+
+  async function handleClearWard() {
+    if (!confirm(`ล้างข้อมูลผังเตียงของ ${activeWardObj?.name} ทั้งหมด?`)) return
+    await apiClearBedsMapWard(activeWard)
+    setReloadKey(k => k + 1)
+  }
+
+  if (!activeWardObj) return <div className="p-4 text-slate-400">ไม่มี Ward</div>
+
+  return (
+    <div className="p-4 space-y-4">
+      {/* Ward chip picker */}
+      <div className="card">
+        <div className="text-sm font-bold text-slate-700 mb-2">🗺 เลือก Ward</div>
+        <div className="flex flex-wrap gap-2">
+          {WARDS.map(w => {
+            const s = summary[w.id]
+            const active = w.id === activeWard
+            return (
+              <button key={w.id} onClick={() => pickWard(w.id)}
+                className={`px-3 py-1.5 rounded-lg border text-sm font-semibold transition-all ${active ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}>
+                {w.name}
+                <span className="ml-2 text-xs opacity-80">
+                  🛌 {s.occupied}/{w.beds}
+                  {s.cleaning > 0 && <span className="text-amber-500"> 🧹 {s.cleaning}</span>}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Move mode banner */}
+      {moveMode && (
+        <div className="card bg-indigo-50 border-indigo-200">
+          <div className="flex items-center gap-3">
+            <div className="text-sm font-bold text-indigo-700 flex-1">
+              🔀 กำลังย้ายเตียง: {moveMode.bed.name || moveMode.bed.hn || 'ผู้ป่วย'} — จาก {moveMode.fromWard}#{moveMode.fromBed}
+              <div className="text-xs text-indigo-600 mt-0.5">คลิกเตียงว่างในหน้านี้เพื่อวางลง หรือเลือก Ward อื่นก่อน</div>
+            </div>
+            <button onClick={() => setMoveMode(null)}
+              className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
+              ยกเลิก
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Ward header + legend */}
+      <div className="card">
+        <div className="flex items-center gap-3 mb-3 flex-wrap">
+          <div className="text-lg font-bold text-slate-800 flex-1">
+            {activeWardObj.name}
+            {activeWardObj.type === 'ICU' && <span className="text-xs ml-2 px-2 py-0.5 rounded bg-purple-100 text-purple-700 font-semibold">ICU</span>}
+            <span className="text-sm text-slate-500 ml-2">รวม {activeWardObj.beds} เตียง</span>
+          </div>
+          <button onClick={handleClearWard}
+            className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 font-semibold">
+            🗑 ล้างผัง Ward นี้
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-3 text-xs mb-3">
+          {Object.entries(STATUS).map(([k, v]) => (
+            <div key={k} className="flex items-center gap-1.5">
+              <div className="w-4 h-4 rounded" style={{ background: v.bg, border: `1px solid ${v.border}` }} />
+              <span className="text-slate-600 font-semibold">{v.label}</span>
+            </div>
+          ))}
+        </div>
+
+        {loading ? (
+          <div className="text-center text-slate-400 py-8">⏳ กำลังโหลด...</div>
+        ) : (
+          <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))' }}>
+            {activeBeds.map(bed => {
+              const s = STATUS[bed.status] || STATUS.empty
+              const isMoveSrc = moveMode && moveMode.fromWard === activeWard && moveMode.fromBed === bed.bed_no
+              return (
+                <button key={bed.bed_no} onClick={() => onBedClick(bed)}
+                  className={`text-left rounded-xl border-2 p-2 min-h-[74px] transition-all hover:shadow-md ${isMoveSrc ? 'ring-2 ring-indigo-400' : ''}`}
+                  style={{ background: s.bg, borderColor: s.border }}>
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-bold text-slate-500">#{bed.bed_no}</div>
+                    <div className="text-sm">{s.icon}</div>
+                  </div>
+                  {bed.status === 'occupied' && (
+                    <>
+                      <div className="text-xs font-bold truncate mt-1" style={{ color: s.color }}>
+                        {bed.name || bed.hn || '—'}
+                      </div>
+                      <div className="flex items-center gap-1 mt-0.5 text-[10px] text-slate-600">
+                        {bed.sex && <span>{bed.sex === 'M' ? '♂' : '♀'}</span>}
+                        {bed.level && (
+                          <span className="px-1 rounded text-white font-bold"
+                            style={{ background: LV_COLOR[bed.level - 1] }}>Lv{bed.level}</span>
+                        )}
+                        {bed.admitted_at && <span>{dayDiff(bed.admitted_at)}d</span>}
+                      </div>
+                    </>
+                  )}
+                  {bed.status === 'cleaning' && (
+                    <div className="text-[10px] mt-1" style={{ color: s.color }}>รอเตรียมห้อง</div>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {editingBed && (
+        <BedEditModal bed={editingBed} onClose={() => setEditingBed(null)}
+          onSave={handleSaveBed} onStartMove={startMove} />
+      )}
+    </div>
+  )
+}
+
+const EMPTY_FORM = { wardId: '', bedNo: 0, status: 'empty', hn: '', name: '', sex: 'M', level: 1, admitted_at: '', remark: '' }
+
+function BedEditModal({ bed, onClose, onSave, onStartMove }) {
+  const [form, setForm] = useState(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    return {
+      wardId: bed.ward, bedNo: bed.bedNo,
+      status: bed.bed.status || 'empty',
+      hn: bed.bed.hn || '',
+      name: bed.bed.name || '',
+      sex: bed.bed.sex || 'M',
+      level: bed.bed.level || 1,
+      admitted_at: bed.bed.admitted_at || today,
+      remark: bed.bed.remark || '',
+    }
+  })
+  function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
+
+  const title = `${bed.ward} #${bed.bedNo}`
+  const isOccupied = bed.bed.status === 'occupied'
+  const isCleaning = bed.bed.status === 'cleaning'
+
+  function assign() {
+    if (!form.name && !form.hn) { alert('กรุณากรอก HN หรือ ชื่อ'); return }
+    onSave({ ...form, status: 'occupied', action: 'assign' })
+  }
+  function discharge() {
+    if (!confirm('จำหน่ายผู้ป่วย (เตียงจะเข้าคิวเตรียมห้อง)?')) return
+    onSave({ wardId: form.wardId, bedNo: form.bedNo, status: 'cleaning', action: 'discharge' })
+  }
+  function cleanDone() {
+    onSave({ wardId: form.wardId, bedNo: form.bedNo, status: 'empty', action: 'clean_done' })
+  }
+  function updatePatient() {
+    onSave({ ...form, status: 'occupied', action: 'update' })
+  }
+
+  return (
+    <Modal open={true} onClose={onClose} title={`🛏 ${title}`} maxWidth="480px">
+      <div className="space-y-3">
+        {isOccupied && (
+          <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2">
+            🛌 เตียงนี้มีผู้ป่วยอยู่ — แก้ข้อมูลด้านล่าง หรือกด <b>ย้ายเตียง</b> / <b>จำหน่าย</b>
+          </div>
+        )}
+        {isCleaning && (
+          <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+            🧹 กำลังรอเตรียมห้อง — กด <b>ทำความสะอาดเสร็จ</b> เพื่อคืนเตียงว่าง
+          </div>
+        )}
+
+        {(!isCleaning) && (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">HN</label>
+                <input value={form.hn} onChange={e => set('hn', e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">ชื่อ - นามสกุล</label>
+                <input value={form.name} onChange={e => set('name', e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">เพศ</label>
+                <select value={form.sex} onChange={e => set('sex', e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                  <option value="M">ชาย</option>
+                  <option value="F">หญิง</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Level</label>
+                <select value={form.level} onChange={e => set('level', +e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                  {[1,2,3,4,5].map(n => <option key={n} value={n}>Lv.{n}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">วันที่รับเข้า</label>
+                <input type="date" value={form.admitted_at} onChange={e => set('admitted_at', e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">หมายเหตุ</label>
+                <input value={form.remark} onChange={e => set('remark', e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+              </div>
+            </div>
+          </>
+        )}
+
+        <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-200">
+          {!isOccupied && !isCleaning && (
+            <button onClick={assign}
+              className="text-sm px-4 py-2 rounded-lg bg-indigo-500 text-white font-semibold hover:bg-indigo-600">
+              ➕ รับเข้า
+            </button>
+          )}
+          {isOccupied && (
+            <>
+              <button onClick={updatePatient}
+                className="text-sm px-4 py-2 rounded-lg bg-slate-600 text-white font-semibold hover:bg-slate-700">
+                💾 บันทึกแก้ไข
+              </button>
+              <button onClick={() => onStartMove(bed.bed)}
+                className="text-sm px-4 py-2 rounded-lg bg-indigo-500 text-white font-semibold hover:bg-indigo-600">
+                🔀 ย้ายเตียง
+              </button>
+              <button onClick={discharge}
+                className="text-sm px-4 py-2 rounded-lg bg-amber-500 text-white font-semibold hover:bg-amber-600">
+                🏠 จำหน่าย
+              </button>
+            </>
+          )}
+          {isCleaning && (
+            <button onClick={cleanDone}
+              className="text-sm px-4 py-2 rounded-lg bg-green-500 text-white font-semibold hover:bg-green-600">
+              ✅ ทำความสะอาดเสร็จ
+            </button>
+          )}
+          <div className="flex-1" />
+          <button onClick={onClose}
+            className="text-sm px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
+            ปิด
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}

@@ -6,6 +6,7 @@ const TABS = [
   { id: 'daily',      label: '📅 รายวัน' },
   { id: 'wardreport', label: '🏥 รายงาน Ward' },
   { id: 'beds',       label: '🛏 เตียงว่าง' },
+  { id: 'bedmap',     label: '🗺 ผังเตียง' },
   { id: 'report',     label: '📊 รายงานรวม' },
   { id: 'settings',   label: '⚙️ ตั้งค่า' },
 ]

@@ -17,6 +17,7 @@ import DailyTab from '../../components/tabs/DailyTab'
 import ReportTab from '../../components/tabs/ReportTab'
 import WardReportTab from '../../components/tabs/WardReportTab'
 import BedAvailabilityTab from '../../components/tabs/BedAvailabilityTab'
+import BedMapTab from '../../components/tabs/BedMapTab'
 import SettingsTab from '../../components/tabs/SettingsTab'
 import EntryModal from '../../components/modals/EntryModal'
 import OosModal from '../../components/modals/OosModal'
@@ -104,6 +105,7 @@ export default function DashboardPage() {
             {activeTab === 'daily'      && <DailyTab      cfg={cfg} year={selYear} month={selMonth} onOpenDailyEdit={openDailyEdit} />}
             {activeTab === 'wardreport' && <WardReportTab cfg={cfg} year={selYear} month={selMonth} />}
             {activeTab === 'beds'       && <BedAvailabilityTab />}
+            {activeTab === 'bedmap'     && <BedMapTab />}
             {activeTab === 'report'     && <ReportTab     cfg={cfg} year={selYear} month={selMonth} oos={oos} entries={entries} />}
             {activeTab === 'settings'   && <SettingsTab   cfg={cfg} onSaveCfg={saveCfg} />}
           </div>
