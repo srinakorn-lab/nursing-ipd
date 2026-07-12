@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useWards } from '../../lib/hooks/useWards'
 import { apiLoadBedsMap, apiSaveBed, apiMoveBed, apiClearBedsMapWard, apiLoadConfig } from '../../lib/storage'
-import { getBedUnits } from '../../lib/bedLayout'
+import { getBedUnits, WARD_ROOM_META } from '../../lib/bedLayout'
 import Modal from '../ui/Modal'
 
 const STATUS = {
@@ -15,9 +15,7 @@ const LV_COLOR = ['#93c5fd','#6ee7b7','#fcd34d','#fb923c','#f87171']
 
 function dayDiff(iso) {
   if (!iso) return 0
-  const start = new Date(iso)
-  const end   = new Date()
-  return Math.max(0, Math.floor((end - start) / (1000*60*60*24)))
+  return Math.max(0, Math.floor((new Date() - new Date(iso)) / (1000*60*60*24)))
 }
 
 function BedCard({ unit, bed, isMoveSrc, onClick }) {
@@ -25,14 +23,17 @@ function BedCard({ unit, bed, isMoveSrc, onClick }) {
   return (
     <button onClick={onClick}
       className={`text-left rounded-xl border-2 p-2 min-h-[74px] transition-all hover:shadow-md ${isMoveSrc ? 'ring-2 ring-indigo-400' : ''}`}
-      style={{ background: s.bg, borderColor: s.border }}>
+      style={{ background: s.bg, borderColor: unit.isExtra ? '#a855f7' : s.border, borderStyle: unit.isExtra ? 'dashed' : 'solid' }}>
       <div className="flex items-center justify-between">
         <div className="text-xs font-bold text-slate-600">{unit.code}</div>
         <div className="text-sm">{s.icon}</div>
       </div>
+      {unit.label && (
+        <div className="text-[9px] text-purple-600 font-semibold truncate">{unit.label}</div>
+      )}
       {bed.status === 'occupied' && (
         <>
-          <div className="text-xs font-bold truncate mt-1" style={{ color: s.color }}>
+          <div className="text-xs font-bold truncate mt-0.5" style={{ color: s.color }}>
             {bed.name || bed.hn || '—'}
           </div>
           <div className="flex items-center gap-1 mt-0.5 text-[10px] text-slate-600">
@@ -60,8 +61,10 @@ export default function BedMapTab() {
   const [reloadKey, setReloadKey] = useState(0)
   const [loading, setLoading] = useState(true)
 
-  const [editingBed, setEditingBed] = useState(null)   // { ward, bedNo, bed }
+  const [editingBed, setEditingBed] = useState(null)   // { ward, bedNo, bed, unit }
   const [moveMode, setMoveMode] = useState(null)       // { fromWard, fromBed, bed }
+  const [splitModal, setSplitModal] = useState(null)   // { roomNum, code }
+  const [extraModal, setExtraModal] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -73,8 +76,8 @@ export default function BedMapTab() {
   }, [reloadKey])
 
   const activeWardObj = WARDS.find(w => w.id === activeWard)
+  const isRoomWard = !!WARD_ROOM_META[activeWard]
 
-  // Bed units for active ward (room codes) merged with D1 state
   const activeUnits = useMemo(() => {
     if (!activeWardObj) return []
     const wd = data[activeWard] || {}
@@ -84,7 +87,8 @@ export default function BedMapTab() {
     }))
   }, [activeWard, activeWardObj, data, layoutCfg])
 
-  const singles = activeUnits.filter(u => !u.isShared)
+  const singles = activeUnits.filter(u => !u.isShared && !u.isExtra)
+  const extras  = activeUnits.filter(u => u.isExtra)
   const sharedRooms = useMemo(() => {
     const map = {}
     activeUnits.filter(u => u.isShared).forEach(u => {
@@ -94,7 +98,7 @@ export default function BedMapTab() {
     return map
   }, [activeUnits])
 
-  // Summary per ward for chips
+  // Real patient count per ward
   const summary = useMemo(() => {
     const s = {}
     WARDS.forEach(w => {
@@ -110,10 +114,76 @@ export default function BedMapTab() {
     return s
   }, [WARDS, data, layoutCfg])
 
-  function pickWard(id) {
-    setActiveWard(id)
+  const totalAll = useMemo(() => {
+    let occ = 0, tot = 0
+    Object.values(summary).forEach(s => { occ += s.occupied; tot += s.total })
+    return { occ, tot, free: tot - occ }
+  }, [summary])
+
+  // ── Layout editing (sync to D1 config) ─────────────────────────
+  async function saveLayoutCfg(next) {
+    setLayoutCfg(next)
+    if (typeof window !== 'undefined') localStorage.setItem('ipd_bed_layout', JSON.stringify(next))
+    await fetch('/api/config/bed_layout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(next),
+    }).catch(() => {})
   }
 
+  function splitRoom(roomNum, beds, label) {
+    const wl = layoutCfg[activeWard] || {}
+    saveLayoutCfg({
+      ...layoutCfg,
+      [activeWard]: { ...wl, splitRooms: { ...(wl.splitRooms || {}), [roomNum]: { beds, label } } },
+    })
+    setSplitModal(null)
+  }
+
+  function unsplitRoom(roomNum) {
+    const roomUnits = activeUnits.filter(u => u.isShared && u.roomNum === roomNum)
+    if (roomUnits.some(u => u.bed.status !== 'empty')) {
+      alert('ยุบไม่ได้ — ยังมีผู้ป่วยหรือเตียงรอเตรียมห้องอยู่ในห้องนี้')
+      return
+    }
+    if (!confirm(`ยุบห้องรวมกลับเป็นห้องเดี่ยว?`)) return
+    const wl = layoutCfg[activeWard] || {}
+    const sr = { ...(wl.splitRooms || {}) }
+    delete sr[roomNum]
+    const rooms = (wl.rooms || []).filter(r => r !== roomNum)
+    saveLayoutCfg({ ...layoutCfg, [activeWard]: { ...wl, splitRooms: sr, rooms } })
+  }
+
+  function addExtraBed(code, label) {
+    if (!code) return
+    if (activeUnits.some(u => u.code === String(code))) {
+      alert('มีเตียงรหัสนี้อยู่แล้ว')
+      return
+    }
+    const wl = layoutCfg[activeWard] || {}
+    saveLayoutCfg({
+      ...layoutCfg,
+      [activeWard]: { ...wl, extraBeds: [...(wl.extraBeds || []), { code: String(code), label: label || '' }] },
+    })
+    setExtraModal(false)
+  }
+
+  function removeExtraBed(code) {
+    const u = activeUnits.find(x => x.code === String(code))
+    if (u && u.bed.status !== 'empty') {
+      alert('ลบไม่ได้ — เตียงนี้ยังไม่ว่าง')
+      return
+    }
+    if (!confirm(`ลบเตียงแทรก ${code}?`)) return
+    const wl = layoutCfg[activeWard] || {}
+    saveLayoutCfg({
+      ...layoutCfg,
+      [activeWard]: { ...wl, extraBeds: (wl.extraBeds || []).filter(b => String(b.code) !== String(code)) },
+    })
+    setEditingBed(null)
+  }
+
+  // ── Bed actions ─────────────────────────────────────────────────
   function onBedClick(unit) {
     const bed = unit.bed
     if (moveMode) {
@@ -125,7 +195,7 @@ export default function BedMapTab() {
       handleMove(moveMode.fromWard, moveMode.fromBed, activeWard, unit.code)
       return
     }
-    setEditingBed({ ward: activeWard, bedNo: unit.code, bed })
+    setEditingBed({ ward: activeWard, bedNo: unit.code, bed, unit })
   }
 
   function startMove(bed) {
@@ -161,15 +231,21 @@ export default function BedMapTab() {
 
   return (
     <div className="p-4 space-y-4">
-      {/* Ward chip picker */}
+      {/* Ward chip picker + hospital total */}
       <div className="card">
-        <div className="text-sm font-bold text-slate-700 mb-2">🗺 เลือก Ward</div>
+        <div className="flex items-center mb-2 gap-2 flex-wrap">
+          <div className="text-sm font-bold text-slate-700 flex-1">🗺 เลือก Ward</div>
+          <div className="text-xs font-semibold text-slate-600 bg-slate-100 rounded-lg px-3 py-1.5">
+            ทั้ง รพ. 🛌 <b className="text-red-600">{totalAll.occ}</b> / {totalAll.tot} เตียง
+            — ว่าง <b className="text-green-600">{totalAll.free}</b>
+          </div>
+        </div>
         <div className="flex flex-wrap gap-2">
           {WARDS.map(w => {
             const s = summary[w.id]
             const active = w.id === activeWard
             return (
-              <button key={w.id} onClick={() => pickWard(w.id)}
+              <button key={w.id} onClick={() => setActiveWard(w.id)}
                 className={`px-3 py-1.5 rounded-lg border text-sm font-semibold transition-all ${active ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}>
                 {w.name}
                 <span className="ml-2 text-xs opacity-80">
@@ -200,12 +276,16 @@ export default function BedMapTab() {
 
       {/* Ward map */}
       <div className="card">
-        <div className="flex items-center gap-3 mb-3 flex-wrap">
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
           <div className="text-lg font-bold text-slate-800 flex-1">
             {activeWardObj.name}
             {activeWardObj.type === 'ICU' && <span className="text-xs ml-2 px-2 py-0.5 rounded bg-purple-100 text-purple-700 font-semibold">ICU</span>}
             <span className="text-sm text-slate-500 ml-2">รวม {activeUnits.length} เตียง</span>
           </div>
+          <button onClick={() => setExtraModal(true)}
+            className="text-xs px-3 py-1.5 rounded-lg border border-purple-200 text-purple-600 hover:bg-purple-50 font-semibold">
+            ➕ เพิ่มเตียงแทรก
+          </button>
           <button onClick={handleClearWard}
             className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 font-semibold">
             🗑 ล้างผัง Ward นี้
@@ -218,6 +298,10 @@ export default function BedMapTab() {
               <span className="text-slate-600 font-semibold">{v.label}</span>
             </div>
           ))}
+          <div className="flex items-center gap-1.5">
+            <div className="w-4 h-4 rounded border-2 border-dashed" style={{ borderColor: '#a855f7' }} />
+            <span className="text-slate-600 font-semibold">เตียงแทรก</span>
+          </div>
         </div>
 
         {loading ? (
@@ -236,7 +320,16 @@ export default function BedMapTab() {
             {/* Shared rooms */}
             {Object.entries(sharedRooms).map(([room, units]) => (
               <div key={room} className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/40 p-3">
-                <div className="text-sm font-bold text-indigo-700 mb-2">🏠 ห้องรวม {room} ({units.length} เตียง)</div>
+                <div className="flex items-center mb-2 gap-2">
+                  <div className="text-sm font-bold text-indigo-700 flex-1">
+                    🏠 ห้องรวม {room} ({units.length} เตียง)
+                    {units[0]?.label && <span className="text-xs font-semibold text-purple-600 ml-2">— {units[0].label}</span>}
+                  </div>
+                  <button onClick={() => unsplitRoom(units[0].roomNum)}
+                    className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-500 hover:bg-white">
+                    ↩ ยุบเป็นห้องเดี่ยว
+                  </button>
+                </div>
                 <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' }}>
                   {units.map(u => (
                     <BedCard key={u.code} unit={u} bed={u.bed}
@@ -246,19 +339,106 @@ export default function BedMapTab() {
                 </div>
               </div>
             ))}
+
+            {/* Extra beds */}
+            {extras.length > 0 && (
+              <div className="mt-4 rounded-xl border border-purple-200 bg-purple-50/40 p-3">
+                <div className="text-sm font-bold text-purple-700 mb-2">➕ เตียงแทรก ({extras.length})</div>
+                <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' }}>
+                  {extras.map(u => (
+                    <BedCard key={u.code} unit={u} bed={u.bed}
+                      isMoveSrc={moveMode && moveMode.fromWard === activeWard && moveMode.fromBed === u.code}
+                      onClick={() => onBedClick(u)} />
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
 
       {editingBed && (
         <BedEditModal bed={editingBed} onClose={() => setEditingBed(null)}
-          onSave={handleSaveBed} onStartMove={startMove} />
+          onSave={handleSaveBed} onStartMove={startMove}
+          canSplit={isRoomWard && !editingBed.unit.isShared && !editingBed.unit.isExtra && editingBed.bed.status === 'empty'}
+          onSplit={() => { setSplitModal({ roomNum: editingBed.unit.roomNum, code: editingBed.unit.room }); setEditingBed(null) }}
+          onRemoveExtra={editingBed.unit.isExtra ? () => removeExtraBed(editingBed.unit.code) : null} />
+      )}
+
+      {splitModal && (
+        <SplitRoomModal room={splitModal} onClose={() => setSplitModal(null)} onConfirm={splitRoom} />
+      )}
+      {extraModal && (
+        <ExtraBedModal ward={activeWardObj} onClose={() => setExtraModal(false)} onConfirm={addExtraBed} />
       )}
     </div>
   )
 }
 
-function BedEditModal({ bed, onClose, onSave, onStartMove }) {
+// ── Split room modal ──────────────────────────────────────────────
+function SplitRoomModal({ room, onClose, onConfirm }) {
+  const [beds, setBeds] = useState(6)
+  const [label, setLabel] = useState('')
+  return (
+    <Modal open={true} onClose={onClose} title={`🏠 แตกห้องรวม — ${room.code}`} maxWidth="380px">
+      <div className="space-y-3">
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">จำนวนเตียง (/1 – /N)</label>
+          <input type="number" min="2" max="12" value={beds} onChange={e => setBeds(Math.max(2, +e.target.value || 2))}
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">ป้ายกำกับ (ไม่บังคับ)</label>
+          <input value={label} onChange={e => setLabel(e.target.value)}
+            placeholder="เช่น หญิงรวม monitor / รวมชาย"
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div className="text-xs text-indigo-600">
+          จะได้เตียง: {room.code}/1 – {room.code}/{beds}
+        </div>
+        <div className="flex gap-2 justify-end pt-2 border-t border-slate-200">
+          <button onClick={onClose}
+            className="text-sm px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">ยกเลิก</button>
+          <button onClick={() => onConfirm(room.roomNum, beds, label)}
+            className="text-sm px-4 py-2 rounded-lg bg-indigo-500 text-white font-semibold hover:bg-indigo-600">✅ แตกห้อง</button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// ── Extra bed modal ───────────────────────────────────────────────
+function ExtraBedModal({ ward, onClose, onConfirm }) {
+  const [code, setCode] = useState('')
+  const [label, setLabel] = useState('')
+  return (
+    <Modal open={true} onClose={onClose} title={`➕ เพิ่มเตียงแทรก — ${ward.name}`} maxWidth="380px">
+      <div className="space-y-3">
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">รหัสเตียง</label>
+          <input value={code} onChange={e => setCode(e.target.value)}
+            placeholder={ward.type === 'ICU' ? 'เช่น 14, 15' : 'เช่น 1026A'}
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">ป้ายกำกับ (ไม่บังคับ)</label>
+          <input value={label} onChange={e => setLabel(e.target.value)}
+            placeholder="เช่น rehab / แทรก 1"
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div className="flex gap-2 justify-end pt-2 border-t border-slate-200">
+          <button onClick={onClose}
+            className="text-sm px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">ยกเลิก</button>
+          <button onClick={() => onConfirm(code.trim(), label.trim())}
+            className="text-sm px-4 py-2 rounded-lg bg-purple-500 text-white font-semibold hover:bg-purple-600">✅ เพิ่มเตียง</button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+// ── Bed edit modal ────────────────────────────────────────────────
+function BedEditModal({ bed, onClose, onSave, onStartMove, canSplit, onSplit, onRemoveExtra }) {
   const [form, setForm] = useState(() => {
     const today = new Date().toISOString().slice(0, 10)
     return {
@@ -274,7 +454,7 @@ function BedEditModal({ bed, onClose, onSave, onStartMove }) {
   })
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
 
-  const title = `${bed.ward} — ${bed.bedNo}`
+  const title = `${bed.ward} — ${bed.bedNo}${bed.unit?.label ? ` (${bed.unit.label})` : ''}`
   const isOccupied = bed.bed.status === 'occupied'
   const isCleaning = bed.bed.status === 'cleaning'
 
@@ -352,6 +532,18 @@ function BedEditModal({ bed, onClose, onSave, onStartMove }) {
             <button onClick={assign}
               className="text-sm px-4 py-2 rounded-lg bg-indigo-500 text-white font-semibold hover:bg-indigo-600">
               ➕ รับเข้า
+            </button>
+          )}
+          {canSplit && (
+            <button onClick={onSplit}
+              className="text-sm px-4 py-2 rounded-lg border border-indigo-300 text-indigo-600 font-semibold hover:bg-indigo-50">
+              🏠 แตกห้องรวม
+            </button>
+          )}
+          {onRemoveExtra && !isOccupied && !isCleaning && (
+            <button onClick={onRemoveExtra}
+              className="text-sm px-4 py-2 rounded-lg border border-red-200 text-red-600 font-semibold hover:bg-red-50">
+              🗑 ลบเตียงแทรก
             </button>
           )}
           {isOccupied && (
