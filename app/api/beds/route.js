@@ -60,12 +60,13 @@ export async function POST(request) {
     const deviceId = request.headers.get('x-device-id') || 'unknown'
     await DB.prepare(`
       INSERT INTO bed_availability_log
-        (ward_id, single_free, male_free, female_free, monitor_male, monitor_female, remark, device_id)
-      VALUES (?,?,?,?,?,?,?,?)
+        (ward_id, single_free, male_free, female_free, monitor_male, monitor_female, child_free, adult_free, remark, device_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?)
     `).bind(
       e.wardId,
       e.single_free|0, e.male_free|0, e.female_free|0,
       e.monitor_male|0, e.monitor_female|0,
+      e.child_free|0, e.adult_free|0,
       e.remark || '', deviceId
     ).run()
     return Response.json({ ok: true })

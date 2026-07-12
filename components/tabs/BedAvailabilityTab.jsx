@@ -9,9 +9,11 @@ const FIELDS = [
   { key: 'female_free',    label: 'รวมหญิง',        color: '#db2777' },
   { key: 'monitor_male',   label: 'Monitor รวมชาย',  color: '#7c3aed' },
   { key: 'monitor_female', label: 'Monitor รวมหญิง', color: '#c026d3' },
+  { key: 'child_free',     label: 'ว่างเด็ก',        color: '#0d9488' },
+  { key: 'adult_free',     label: 'ว่างผู้ใหญ่',     color: '#ca8a04' },
 ]
 
-const EMPTY_ENTRY = { wardId: WARDS[0].id, single_free: 0, male_free: 0, female_free: 0, monitor_male: 0, monitor_female: 0, remark: '' }
+const EMPTY_ENTRY = { wardId: WARDS[0].id, single_free: 0, male_free: 0, female_free: 0, monitor_male: 0, monitor_female: 0, child_free: 0, adult_free: 0, remark: '' }
 
 export default function BedAvailabilityTab() {
   const [data, setData] = useState({})
@@ -62,19 +64,17 @@ export default function BedAvailabilityTab() {
   function pickWard(wardId) {
     const last = data[wardId]
     if (last) {
-      setForm({
-        wardId,
-        single_free: last.single_free, male_free: last.male_free, female_free: last.female_free,
-        monitor_male: last.monitor_male, monitor_female: last.monitor_female,
-        remark: last.remark || '',
-      })
+      const next = { wardId, remark: last.remark || '' }
+      FIELDS.forEach(f => { next[f.key] = last[f.key] || 0 })
+      setForm(next)
     } else {
       setForm({ ...EMPTY_ENTRY, wardId })
     }
   }
 
   const totals = useMemo(() => {
-    const t = { single_free: 0, male_free: 0, female_free: 0, monitor_male: 0, monitor_female: 0 }
+    const t = {}
+    FIELDS.forEach(f => { t[f.key] = 0 })
     Object.values(data).forEach(d => FIELDS.forEach(f => { t[f.key] += d[f.key] || 0 }))
     return t
   }, [data])
@@ -102,7 +102,7 @@ export default function BedAvailabilityTab() {
       {/* Totals across all wards */}
       <div className="card">
         <div className="text-sm font-bold text-slate-700 mb-3">🛏 สรุปเตียงว่างทุก Ward</div>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-4">
           {FIELDS.map(f => (
             <div key={f.key} className="rounded-xl border px-3 py-3"
                  style={{ borderColor: f.color + '44', background: f.color + '0a' }}>

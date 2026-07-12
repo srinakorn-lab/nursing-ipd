@@ -11,6 +11,12 @@ const STATUS = {
   cleaning: { label: 'รอเตรียมห้อง',   color: '#d97706', bg: '#fef3c7', border: '#fcd34d', icon: '🧹' },
 }
 
+// Occupied bed tint by patient sex
+const SEX = {
+  M: { color: '#2563eb', bg: '#dbeafe', border: '#93c5fd', icon: '♂' },  // ชาย = ฟ้า
+  F: { color: '#db2777', bg: '#fce7f3', border: '#f9a8d4', icon: '♀' },  // หญิง = ชมพู
+}
+
 const LV_COLOR = ['#93c5fd','#6ee7b7','#fcd34d','#fb923c','#f87171']
 
 function dayDiff(iso) {
@@ -20,24 +26,29 @@ function dayDiff(iso) {
 
 function BedCard({ unit, bed, isMoveSrc, onClick }) {
   const s = STATUS[bed.status] || STATUS.empty
+  // Occupied → color by sex if known, else generic red
+  const sx = bed.status === 'occupied' ? SEX[bed.sex] : null
+  const bg = sx ? sx.bg : s.bg
+  const bd = unit.isExtra ? '#a855f7' : (sx ? sx.border : s.border)
+  const nameColor = sx ? sx.color : s.color
   return (
     <button onClick={onClick}
       className={`text-left rounded-xl border-2 p-2 min-h-[74px] transition-all hover:shadow-md ${isMoveSrc ? 'ring-2 ring-indigo-400' : ''}`}
-      style={{ background: s.bg, borderColor: unit.isExtra ? '#a855f7' : s.border, borderStyle: unit.isExtra ? 'dashed' : 'solid' }}>
+      style={{ background: bg, borderColor: bd, borderStyle: unit.isExtra ? 'dashed' : 'solid' }}>
       <div className="flex items-center justify-between">
         <div className="text-xs font-bold text-slate-600">{unit.code}</div>
-        <div className="text-sm">{s.icon}</div>
+        <div className="text-sm">{sx ? sx.icon : s.icon}</div>
       </div>
       {unit.label && (
         <div className="text-[9px] text-purple-600 font-semibold truncate">{unit.label}</div>
       )}
       {bed.status === 'occupied' && (
         <>
-          <div className="text-xs font-bold truncate mt-0.5" style={{ color: s.color }}>
+          <div className="text-xs font-bold truncate mt-0.5" style={{ color: nameColor }}>
             {bed.name || bed.hn || '—'}
           </div>
           <div className="flex items-center gap-1 mt-0.5 text-[10px] text-slate-600">
-            {bed.sex && <span>{bed.sex === 'M' ? '♂' : '♀'}</span>}
+            {bed.sex && <span className="font-bold" style={{ color: nameColor }}>{SEX[bed.sex]?.icon}</span>}
             {bed.level && (
               <span className="px-1 rounded text-white font-bold"
                 style={{ background: LV_COLOR[bed.level - 1] }}>Lv{bed.level}</span>
@@ -292,12 +303,22 @@ export default function BedMapTab() {
           </button>
         </div>
         <div className="flex flex-wrap gap-3 text-xs mb-3">
-          {Object.entries(STATUS).map(([k, v]) => (
-            <div key={k} className="flex items-center gap-1.5">
-              <div className="w-4 h-4 rounded" style={{ background: v.bg, border: `1px solid ${v.border}` }} />
-              <span className="text-slate-600 font-semibold">{v.label}</span>
-            </div>
-          ))}
+          <div className="flex items-center gap-1.5">
+            <div className="w-4 h-4 rounded" style={{ background: STATUS.empty.bg, border: `1px solid ${STATUS.empty.border}` }} />
+            <span className="text-slate-600 font-semibold">ว่าง</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-4 h-4 rounded" style={{ background: SEX.M.bg, border: `1px solid ${SEX.M.border}` }} />
+            <span className="text-slate-600 font-semibold">♂ ชาย</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-4 h-4 rounded" style={{ background: SEX.F.bg, border: `1px solid ${SEX.F.border}` }} />
+            <span className="text-slate-600 font-semibold">♀ หญิง</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-4 h-4 rounded" style={{ background: STATUS.cleaning.bg, border: `1px solid ${STATUS.cleaning.border}` }} />
+            <span className="text-slate-600 font-semibold">รอเตรียมห้อง</span>
+          </div>
           <div className="flex items-center gap-1.5">
             <div className="w-4 h-4 rounded border-2 border-dashed" style={{ borderColor: '#a855f7' }} />
             <span className="text-slate-600 font-semibold">เตียงแทรก</span>
@@ -318,12 +339,21 @@ export default function BedMapTab() {
             </div>
 
             {/* Shared rooms */}
-            {Object.entries(sharedRooms).map(([room, units]) => (
+            {Object.entries(sharedRooms).map(([room, units]) => {
+              const male   = units.filter(u => u.bed.status === 'occupied' && u.bed.sex === 'M').length
+              const female = units.filter(u => u.bed.status === 'occupied' && u.bed.sex === 'F').length
+              const free   = units.filter(u => u.bed.status === 'empty').length
+              return (
               <div key={room} className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/40 p-3">
-                <div className="flex items-center mb-2 gap-2">
+                <div className="flex items-center mb-2 gap-2 flex-wrap">
                   <div className="text-sm font-bold text-indigo-700 flex-1">
                     🏠 ห้องรวม {room} ({units.length} เตียง)
                     {units[0]?.label && <span className="text-xs font-semibold text-purple-600 ml-2">— {units[0].label}</span>}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs font-semibold">
+                    <span className="px-2 py-0.5 rounded" style={{ background: SEX.M.bg, color: SEX.M.color }}>♂ {male}</span>
+                    <span className="px-2 py-0.5 rounded" style={{ background: SEX.F.bg, color: SEX.F.color }}>♀ {female}</span>
+                    <span className="px-2 py-0.5 rounded bg-green-100 text-green-700">ว่าง {free}</span>
                   </div>
                   <button onClick={() => unsplitRoom(units[0].roomNum)}
                     className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-500 hover:bg-white">
@@ -338,7 +368,7 @@ export default function BedMapTab() {
                   ))}
                 </div>
               </div>
-            ))}
+            )})}
 
             {/* Extra beds */}
             {extras.length > 0 && (
