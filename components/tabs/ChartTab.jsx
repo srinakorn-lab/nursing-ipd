@@ -1,7 +1,7 @@
 'use client'
 import { useMemo, useState, useEffect } from 'react'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
-import { THAI_MONTHS } from '../../lib/constants'
+import { THAI_MONTHS, ACTIVITIES } from '../../lib/constants'
 import { loadDailyEntries, loadEntries, apiLoadDailyEntries, apiLoadEntries } from '../../lib/storage'
 import { calcProd, calcPts, getAvailBeds } from '../../lib/calc'
 import { useWards } from '../../lib/hooks/useWards'
@@ -141,6 +141,18 @@ export default function ChartTab({ cfg, oos, year, month }) {
       all:  calcGroup(makeRows(WARDS),       cfg, oos),
     }
   }, [dailyWardData, cfg, oos, WARDS, WARD_WARDS, ICU_WARDS])
+
+  // Workload activities summed across all wards (selected day)
+  const activityBars = useMemo(() => {
+    return ACTIVITIES.map(a => {
+      let day = 0, night = 0
+      Object.values(dailyWardData).forEach(e => {
+        day   += e.day?.activities?.[a.key]   || 0
+        night += e.night?.activities?.[a.key] || 0
+      })
+      return { label: a.label, day, night, total: day + night }
+    })
+  }, [dailyWardData])
 
   // ── Shared chart components ───────────────────────────────────
   const GroupProdLine = ({ data, xKey }) => (
@@ -300,6 +312,24 @@ export default function ChartTab({ cfg, oos, year, month }) {
             <div className="card">
               <div className="text-sm font-bold text-purple-700 mb-3">🏨 วิกฤต — จำนวนผู้ป่วยตาม Level (วันที่ {selDay})</div>
               <DailyPcChart data={getLevelBars(ICU_WARDS)} xKey="ward" height={180} />
+            </div>
+          )}
+
+          {/* Workload activities */}
+          {activityBars.some(a => a.total > 0) && (
+            <div className="card">
+              <div className="text-sm font-bold text-slate-700 mb-3">⚙️ ภาระงานเฉพาะ / หัตถการ — รวมทุก Ward (วันที่ {selDay})</div>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={activityBars.filter(a => a.total > 0)} margin={{ top: 5, right: 10, left: -10, bottom: 40 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="label" tick={{ fontSize: 9 }} angle={-35} textAnchor="end" interval={0} />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="day"   name="☀️ DAY"   fill="#0284c7" radius={[3,3,0,0]} maxBarSize={22} />
+                  <Bar dataKey="night" name="🌙 NIGHT" fill="#7c3aed" radius={[3,3,0,0]} maxBarSize={22} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           )}
         </>

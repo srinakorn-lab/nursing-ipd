@@ -19,11 +19,14 @@ export async function GET(request, { params }) {
     results.forEach(r => {
       if (!data[r.ward_id]) data[r.ward_id] = {}
       const shift = r.shift.toLowerCase()
+      let activities = null
+      try { activities = r.activities ? JSON.parse(r.activities) : null } catch {}
       data[r.ward_id][shift] = {
         wardId: r.ward_id, shift,
         lv1: r.lv1, lv2: r.lv2, lv3: r.lv3, lv4: r.lv4, lv5: r.lv5,
         adm: r.adm, trf: r.trf, ods: r.ods,
         rn: r.rn, pn: r.pn, na: r.na,
+        ...(activities ? { activities } : {}),
       }
     })
     return Response.json(data)
@@ -39,25 +42,27 @@ export async function POST(request, { params }) {
     const { year, month } = await params
     const e = await request.json()
     const deviceId = request.headers.get('x-device-id') || 'unknown'
+    const actJson = e.activities ? JSON.stringify(e.activities) : null
     // Write to main table (current state, LWW)
     await DB.prepare(`
-      INSERT INTO monthly_entries (year,month,ward_id,shift,lv1,lv2,lv3,lv4,lv5,adm,trf,ods,rn,pn,na)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      INSERT INTO monthly_entries (year,month,ward_id,shift,lv1,lv2,lv3,lv4,lv5,adm,trf,ods,rn,pn,na,activities)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       ON CONFLICT(year,month,ward_id,shift) DO UPDATE SET
         lv1=excluded.lv1, lv2=excluded.lv2, lv3=excluded.lv3, lv4=excluded.lv4, lv5=excluded.lv5,
         adm=excluded.adm, trf=excluded.trf, ods=excluded.ods,
-        rn=excluded.rn, pn=excluded.pn, na=excluded.na, updated_at=datetime('now')
+        rn=excluded.rn, pn=excluded.pn, na=excluded.na,
+        activities=excluded.activities, updated_at=datetime('now')
     `).bind(+year, +month, e.wardId, e.shift,
       e.lv1||0, e.lv2||0, e.lv3||0, e.lv4||0, e.lv5||0,
-      e.adm||0, e.trf||0, e.ods||0, e.rn||0, e.pn||0, e.na||0
+      e.adm||0, e.trf||0, e.ods||0, e.rn||0, e.pn||0, e.na||0, actJson
     ).run()
     // Append to audit log (every save kept)
     await DB.prepare(`
-      INSERT INTO entries_log (year,month,day,ward_id,shift,lv1,lv2,lv3,lv4,lv5,adm,trf,ods,rn,pn,na,device_id)
-      VALUES (?,?,NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      INSERT INTO entries_log (year,month,day,ward_id,shift,lv1,lv2,lv3,lv4,lv5,adm,trf,ods,rn,pn,na,activities,device_id)
+      VALUES (?,?,NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).bind(+year, +month, e.wardId, e.shift,
       e.lv1||0, e.lv2||0, e.lv3||0, e.lv4||0, e.lv5||0,
-      e.adm||0, e.trf||0, e.ods||0, e.rn||0, e.pn||0, e.na||0, deviceId
+      e.adm||0, e.trf||0, e.ods||0, e.rn||0, e.pn||0, e.na||0, actJson, deviceId
     ).run()
     return Response.json({ ok: true })
   } catch {

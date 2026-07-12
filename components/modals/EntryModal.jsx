@@ -1,17 +1,19 @@
 'use client'
 import { useState, useEffect } from 'react'
 import Modal from '../ui/Modal'
-import { WARDS, THAI_MONTHS } from '../../lib/constants'
+import { WARDS, THAI_MONTHS, ACTIVITIES } from '../../lib/constants'
 
-const EMPTY = { wardId: '', date: '', shift: 'DAY', lv1:0,lv2:0,lv3:0,lv4:0,lv5:0, adm:0,trf:0,ods:0, rn:0,pn:0 }
+const EMPTY = { wardId: '', date: '', shift: 'DAY', lv1:0,lv2:0,lv3:0,lv4:0,lv5:0, adm:0,trf:0,ods:0, rn:0,pn:0, activities: {} }
 
 export default function EntryModal({ open, onClose, onSave, initialData, year, month }) {
   const [form, setForm] = useState(EMPTY)
+  const [showAct, setShowAct] = useState(false)
+  const actCount = Object.values(form.activities || {}).filter(v => v > 0).length
 
   useEffect(() => {
     if (open) {
       if (initialData) {
-        setForm({ ...EMPTY, ...initialData })
+        setForm({ ...EMPTY, ...initialData, activities: initialData.activities || {} })
       } else {
         const today = new Date()
         const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
@@ -25,6 +27,9 @@ export default function EntryModal({ open, onClose, onSave, initialData, year, m
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
   function setNum(k, v) { setForm(f => ({ ...f, [k]: Math.max(0, +v || 0) })) }
+  function setAct(k, v) {
+    setForm(f => ({ ...f, activities: { ...f.activities, [k]: Math.max(0, +v || 0) } }))
+  }
 
   function handleSave() {
     if (!form.wardId || !form.date) { alert('กรุณาเลือก Ward และวันที่'); return }
@@ -93,6 +98,27 @@ export default function EntryModal({ open, onClose, onSave, initialData, year, m
             {numInput('PN (เจ้าพนักงาน)', 'pn')}
             {numInput('NA (ผู้ช่วย)', 'na')}
           </div>
+        </div>
+
+        {/* Workload activities */}
+        <div className="bg-purple-50 border border-purple-100 rounded-xl p-3">
+          <button type="button" onClick={() => setShowAct(s => !s)}
+            className="w-full flex items-center justify-between text-xs font-bold text-purple-700">
+            <span>⚙️ หัตถการ / ภาระงานเฉพาะ (ไม่บังคับ)</span>
+            <span>{showAct ? '▲ ซ่อน' : '▼ แสดง'}{actCount > 0 ? ` · ${actCount} รายการ` : ''}</span>
+          </button>
+          {showAct && (
+            <div className="grid grid-cols-3 gap-2 mt-2">
+              {ACTIVITIES.map(a => (
+                <div key={a.key}>
+                  <label className="block text-[10px] font-semibold text-slate-500 mb-1 truncate" title={a.label}>{a.label}</label>
+                  <input type="number" min="0" value={form.activities?.[a.key] ?? 0}
+                    onChange={e => setAct(a.key, e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-purple-400" />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="flex gap-2 justify-end pt-1">
