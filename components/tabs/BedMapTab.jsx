@@ -60,6 +60,14 @@ function BedCard({ unit, bed, isMoveSrc, onClick }) {
             )}
             {bed.admitted_at && <span>{dayDiff(bed.admitted_at)}d</span>}
           </div>
+          {(bed.specialty || bed.pay_right) && (
+            <div className="text-[9px] text-slate-500 truncate mt-0.5">
+              {bed.specialty}{bed.specialty && bed.pay_right ? ' · ' : ''}{bed.pay_right}
+            </div>
+          )}
+          {bed.diagnosis && (
+            <div className="text-[9px] text-slate-400 truncate italic">{bed.diagnosis}</div>
+          )}
         </>
       )}
       {bed.status === 'cleaning' && (
@@ -531,6 +539,9 @@ function BedEditModal({ bed, onClose, onSave, onStartMove, canSplit, onSplit, on
       sex: bed.bed.sex || 'M',
       level: bed.bed.level || 1,
       admitted_at: bed.bed.admitted_at || today,
+      pay_right: bed.bed.pay_right || '',
+      specialty: bed.bed.specialty || '',
+      diagnosis: bed.bed.diagnosis || '',
       remark: bed.bed.remark || '',
     }
   })
@@ -602,6 +613,44 @@ function BedEditModal({ bed, onClose, onSave, onStartMove, canSplit, onSplit, on
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
             </div>
             <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">สิทธิการรักษา</label>
+              <input list="pay-rights" value={form.pay_right} onChange={e => set('pay_right', e.target.value)}
+                placeholder="เช่น บัตรทอง / ปกส. / ขรก."
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+              <datalist id="pay-rights">
+                <option value="บัตรทอง (UC)" />
+                <option value="ประกันสังคม" />
+                <option value="ข้าราชการ (จ่ายตรง)" />
+                <option value="ประกันชีวิต/บริษัท" />
+                <option value="ชำระเงินเอง" />
+                <option value="เบิกต้นสังกัด" />
+              </datalist>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Specialty (เจ้าของไข้)</label>
+              <input list="specialties" value={form.specialty} onChange={e => set('specialty', e.target.value)}
+                placeholder="เช่น อายุรกรรม / ศัลยกรรม"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+              <datalist id="specialties">
+                <option value="อายุรกรรม" />
+                <option value="ศัลยกรรม" />
+                <option value="ศัลยกรรมกระดูก (Ortho)" />
+                <option value="สูติ-นรีเวช" />
+                <option value="กุมารเวช" />
+                <option value="อายุรกรรมหัวใจ" />
+                <option value="อายุรกรรมประสาท" />
+                <option value="หู คอ จมูก (ENT)" />
+                <option value="ตา" />
+                <option value="ทางเดินปัสสาวะ (Uro)" />
+              </datalist>
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Diagnosis (การวินิจฉัย)</label>
+              <input value={form.diagnosis} onChange={e => set('diagnosis', e.target.value)}
+                placeholder="เช่น CHF, Pneumonia, s/p appendectomy"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div className="col-span-2">
               <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">หมายเหตุ</label>
               <input value={form.remark} onChange={e => set('remark', e.target.value)}
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />

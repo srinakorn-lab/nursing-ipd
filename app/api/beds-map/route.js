@@ -40,12 +40,13 @@ export async function POST(request) {
     const status = e.status || 'empty'
     const clearFields = status === 'empty' || status === 'cleaning'
     await DB.prepare(`
-      INSERT INTO beds_map (ward_id, bed_no, status, hn, name, sex, level, admitted_at, remark)
-      VALUES (?,?,?,?,?,?,?,?,?)
+      INSERT INTO beds_map (ward_id, bed_no, status, hn, name, sex, level, admitted_at, remark, pay_right, specialty, diagnosis)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
       ON CONFLICT(ward_id, bed_no) DO UPDATE SET
         status = excluded.status,
         hn = excluded.hn, name = excluded.name, sex = excluded.sex,
         level = excluded.level, admitted_at = excluded.admitted_at, remark = excluded.remark,
+        pay_right = excluded.pay_right, specialty = excluded.specialty, diagnosis = excluded.diagnosis,
         updated_at = datetime('now')
     `).bind(
       e.wardId, String(e.bedNo), status,
@@ -54,15 +55,19 @@ export async function POST(request) {
       clearFields ? null : (e.sex || null),
       clearFields ? null : (e.level ? +e.level : null),
       clearFields ? null : (e.admitted_at || null),
-      e.remark || null
+      e.remark || null,
+      clearFields ? null : (e.pay_right || null),
+      clearFields ? null : (e.specialty || null),
+      clearFields ? null : (e.diagnosis || null)
     ).run()
 
     await DB.prepare(`
-      INSERT INTO beds_map_log (ward_id, bed_no, action, status, hn, name, sex, level, device_id)
-      VALUES (?,?,?,?,?,?,?,?,?)
+      INSERT INTO beds_map_log (ward_id, bed_no, action, status, hn, name, sex, level, pay_right, specialty, diagnosis, device_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
     `).bind(
       e.wardId, String(e.bedNo), e.action || 'update', status,
-      e.hn || null, e.name || null, e.sex || null, e.level ? +e.level : null, deviceId
+      e.hn || null, e.name || null, e.sex || null, e.level ? +e.level : null,
+      e.pay_right || null, e.specialty || null, e.diagnosis || null, deviceId
     ).run()
 
     return Response.json({ ok: true })

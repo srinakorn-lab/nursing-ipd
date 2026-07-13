@@ -32,21 +32,23 @@ export async function POST(request) {
 
     // Move: assign to destination, clear source
     await DB.prepare(`
-      INSERT INTO beds_map (ward_id, bed_no, status, hn, name, sex, level, admitted_at, remark)
-      VALUES (?,?,'occupied',?,?,?,?,?,?)
+      INSERT INTO beds_map (ward_id, bed_no, status, hn, name, sex, level, admitted_at, remark, pay_right, specialty, diagnosis)
+      VALUES (?,?,'occupied',?,?,?,?,?,?,?,?,?)
       ON CONFLICT(ward_id, bed_no) DO UPDATE SET
         status='occupied',
         hn=excluded.hn, name=excluded.name, sex=excluded.sex,
         level=excluded.level, admitted_at=excluded.admitted_at, remark=excluded.remark,
+        pay_right=excluded.pay_right, specialty=excluded.specialty, diagnosis=excluded.diagnosis,
         updated_at=datetime('now')
     `).bind(
       e.toWard, String(e.toBed),
-      src.hn, src.name, src.sex, src.level, src.admitted_at, src.remark
+      src.hn, src.name, src.sex, src.level, src.admitted_at, src.remark,
+      src.pay_right, src.specialty, src.diagnosis
     ).run()
 
     await DB.prepare(`
       UPDATE beds_map SET status='cleaning', hn=NULL, name=NULL, sex=NULL, level=NULL,
-        admitted_at=NULL, remark=NULL, updated_at=datetime('now')
+        admitted_at=NULL, remark=NULL, pay_right=NULL, specialty=NULL, diagnosis=NULL, updated_at=datetime('now')
       WHERE ward_id=? AND bed_no=?
     `).bind(e.fromWard, String(e.fromBed)).run()
 
