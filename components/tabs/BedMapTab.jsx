@@ -360,15 +360,19 @@ export default function BedMapTab() {
           <div className="text-center text-slate-400 py-8">⏳ กำลังโหลด...</div>
         ) : floorPlan?.rows ? (
           /* ── Floor-plan layout (positioned like the real ward) ── */
-          <div className="space-y-3 overflow-x-auto">
-            {floorPlan.rows.map((row, ri) => (
+          <div className="space-y-2 overflow-x-auto">
+            {/* aisle divides top rows (beds C→A) from bottom rows (A→C) */}
+            {floorPlan.rows.map((row, ri) => {
+              const isTop = ri < floorPlan.rows.length / 2
+              return (
               <div key={ri} className="flex gap-2 items-stretch min-w-max">
                 {row.map((token, ci) => {
                   if (token === 'counter')
-                    return <div key={ci} className="flex-1 min-w-[140px] rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-xs font-bold text-slate-400 py-4">🏢 Counter / เคาน์เตอร์พยาบาล</div>
+                    return <div key={ci} className="flex-1 min-w-[140px] rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-xs font-bold text-slate-400 py-4">🏢 Counter / เคาน์เตอร์พยาบาล · 🚶 ทางเดิน</div>
                   if (!token || token === 'gap')
                     return <div key={ci} className="flex-1 min-w-[40px]" />
-                  const units = (unitsByRoomNum[token] || []).slice().sort((a,b)=>b.code.localeCompare(a.code))
+                  const units = (unitsByRoomNum[token] || []).slice()
+                    .sort((a,b) => isTop ? b.code.localeCompare(a.code) : a.code.localeCompare(b.code))
                   if (!units.length) return <div key={ci} className="min-w-[92px]" />
                   const code = units[0].room
                   const cat  = units[0].category && CATEGORY_BY_KEY[units[0].category]
@@ -389,7 +393,7 @@ export default function BedMapTab() {
                   )
                 })}
               </div>
-            ))}
+            )})}
           </div>
         ) : (
           <>
