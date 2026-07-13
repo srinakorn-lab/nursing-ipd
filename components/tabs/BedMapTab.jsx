@@ -123,6 +123,14 @@ export default function BedMapTab() {
     return map
   }, [activeUnits])
 
+  // Units grouped by room number (for floor-plan layout)
+  const unitsByRoomNum = useMemo(() => {
+    const map = {}
+    activeUnits.forEach(u => { (map[u.roomNum] ||= []).push(u) })
+    return map
+  }, [activeUnits])
+  const floorPlan = layoutCfg[activeWard]?.floorPlan
+
   // Real patient count per ward
   const summary = useMemo(() => {
     const s = {}
@@ -350,6 +358,39 @@ export default function BedMapTab() {
 
         {loading ? (
           <div className="text-center text-slate-400 py-8">⏳ กำลังโหลด...</div>
+        ) : floorPlan?.rows ? (
+          /* ── Floor-plan layout (positioned like the real ward) ── */
+          <div className="space-y-3 overflow-x-auto">
+            {floorPlan.rows.map((row, ri) => (
+              <div key={ri} className="flex gap-2 items-stretch min-w-max">
+                {row.map((token, ci) => {
+                  if (token === 'counter')
+                    return <div key={ci} className="flex-1 min-w-[140px] rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-xs font-bold text-slate-400 py-4">🏢 Counter / เคาน์เตอร์พยาบาล</div>
+                  if (!token || token === 'gap')
+                    return <div key={ci} className="flex-1 min-w-[40px]" />
+                  const units = (unitsByRoomNum[token] || []).slice().sort((a,b)=>b.code.localeCompare(a.code))
+                  if (!units.length) return <div key={ci} className="min-w-[92px]" />
+                  const code = units[0].room
+                  const cat  = units[0].category && CATEGORY_BY_KEY[units[0].category]
+                  const wide = units.length > 3
+                  return (
+                    <div key={ci} className="rounded-xl border border-slate-200 bg-slate-50/60 p-1.5">
+                      <div className="text-[10px] font-bold text-slate-500 text-center mb-1 flex items-center justify-center gap-1">
+                        {code}{cat && <span style={{ color: cat.color }}>· {cat.label}</span>}
+                      </div>
+                      <div className="grid gap-1" style={{ gridTemplateColumns: wide ? 'repeat(2, 88px)' : '88px' }}>
+                        {units.map(u => (
+                          <BedCard key={u.code} unit={u} bed={u.bed}
+                            isMoveSrc={moveMode && moveMode.fromWard === activeWard && moveMode.fromBed === u.code}
+                            onClick={() => onBedClick(u)} />
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
         ) : (
           <>
             {/* Single rooms */}
