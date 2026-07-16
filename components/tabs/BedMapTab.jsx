@@ -370,6 +370,8 @@ export default function BedMapTab() {
                   const gc = { gridColumn: `span ${span}` }
                   if (tok.counter)
                     return <div key={`${ri}-${ci}`} style={gc} className="rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-xs font-bold text-slate-400 py-4">🏢 เคาน์เตอร์พยาบาล · 🚶 ทางเดิน</div>
+                  if (tok.label)
+                    return <div key={`${ri}-${ci}`} style={gc} className="rounded-xl border border-dashed border-slate-300 bg-slate-100 flex items-center justify-center text-center text-[10px] font-semibold text-slate-400 p-2">{tok.label}</div>
                   if (!tok.n || tok.n === 'gap')
                     return <div key={`${ri}-${ci}`} style={gc} />
                   const units = (unitsByRoomNum[tok.n] || []).slice()
