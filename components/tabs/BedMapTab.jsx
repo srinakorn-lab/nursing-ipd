@@ -225,6 +225,38 @@ export default function BedMapTab() {
     setEditingBed(null)
   }
 
+  // Render one floor-plan cell: counter / label (non-bed) / gap / room-with-beds
+  function renderFloorCell(tok, key, isTop, sizeStyle) {
+    if (tok.counter)
+      return <div key={key} style={sizeStyle} className="rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-xs font-bold text-slate-400 py-4">🏢 เคาน์เตอร์พยาบาล · 🚶 ทางเดิน</div>
+    if (tok.label)
+      return <div key={key} style={sizeStyle} className="rounded-xl border border-dashed border-slate-300 bg-slate-100 flex items-center justify-center text-center text-[10px] font-semibold text-slate-400 p-2">{tok.label}</div>
+    if (!tok.n || tok.n === 'gap')
+      return <div key={key} style={sizeStyle} />
+    const units = (unitsByRoomNum[tok.n] || []).slice()
+      .sort((a, b) => isTop ? b.code.localeCompare(a.code) : a.code.localeCompare(b.code))
+    if (!units.length) return <div key={key} style={sizeStyle} />
+    const code = units[0].room
+    const cat  = units[0].category && CATEGORY_BY_KEY[units[0].category]
+    const sex  = roomSexOf(units[0].category)
+    const wide = units.length > 3
+    const roomBg = sex === 'M' ? { bg: '#eff6ff', bd: '#bfdbfe' } : sex === 'F' ? { bg: '#fdf2f8', bd: '#fbcfe8' } : { bg: '#f8fafc', bd: '#e2e8f0' }
+    return (
+      <div key={key} style={{ ...sizeStyle, background: roomBg.bg, borderColor: roomBg.bd }} className="rounded-xl border p-1.5">
+        <div className="text-[10px] font-bold text-slate-600 text-center mb-1 flex items-center justify-center gap-1 flex-wrap">
+          {code}{cat && <span style={{ color: cat.color }}>· {cat.label}</span>}
+        </div>
+        <div className="grid gap-1" style={{ gridTemplateColumns: wide ? 'repeat(2, 1fr)' : '1fr' }}>
+          {units.map(u => (
+            <BedCard key={u.code} unit={u} bed={u.bed}
+              isMoveSrc={moveMode && moveMode.fromWard === activeWard && moveMode.fromBed === u.code}
+              onClick={() => onBedClick(u)} />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   // ── Bed actions ─────────────────────────────────────────────────
   function onBedClick(unit) {
     const bed = unit.bed
@@ -359,47 +391,34 @@ export default function BedMapTab() {
         {loading ? (
           <div className="text-center text-slate-400 py-8">⏳ กำลังโหลด...</div>
         ) : floorPlan?.rows ? (
-          /* ── Floor-plan layout: grid, aligned columns, room bg by sex ── */
-          <div className="overflow-x-auto">
-            <div className="grid gap-2 min-w-max" style={{ gridTemplateColumns: `repeat(${floorPlan.cols || 8}, minmax(94px, 1fr))` }}>
-              {floorPlan.rows.map((row, ri) => {
+          /* ── Floor-plan layout: positioned like the real ward ── */
+          <div className="overflow-x-auto space-y-2">
+            {floorPlan.cols ? (
+              /* Grid mode: strict aligned columns (rectangular wards, e.g. 6B) */
+              <div className="grid gap-2 min-w-max" style={{ gridTemplateColumns: `repeat(${floorPlan.cols}, minmax(94px, 1fr))` }}>
+                {floorPlan.rows.map((row, ri) => {
+                  const isTop = ri < floorPlan.rows.length / 2
+                  return row.map((cell, ci) => {
+                    const tok = typeof cell === 'object' ? cell : { n: cell }
+                    const span = tok.span || 1
+                    return renderFloorCell(tok, `${ri}-${ci}`, isTop, { gridColumn: `span ${span}` })
+                  })
+                })}
+              </div>
+            ) : (
+              /* Flex mode: irregular corridor wards — each row sized by its own content */
+              floorPlan.rows.map((row, ri) => {
                 const isTop = ri < floorPlan.rows.length / 2
-                return row.map((cell, ci) => {
-                  const tok = typeof cell === 'object' ? cell : { n: cell }
-                  const span = tok.span || 1
-                  const gc = { gridColumn: `span ${span}` }
-                  if (tok.counter)
-                    return <div key={`${ri}-${ci}`} style={gc} className="rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-xs font-bold text-slate-400 py-4">🏢 เคาน์เตอร์พยาบาล · 🚶 ทางเดิน</div>
-                  if (tok.label)
-                    return <div key={`${ri}-${ci}`} style={gc} className="rounded-xl border border-dashed border-slate-300 bg-slate-100 flex items-center justify-center text-center text-[10px] font-semibold text-slate-400 p-2">{tok.label}</div>
-                  if (!tok.n || tok.n === 'gap')
-                    return <div key={`${ri}-${ci}`} style={gc} />
-                  const units = (unitsByRoomNum[tok.n] || []).slice()
-                    .sort((a,b) => isTop ? b.code.localeCompare(a.code) : a.code.localeCompare(b.code))
-                  if (!units.length) return <div key={`${ri}-${ci}`} style={gc} />
-                  const code = units[0].room
-                  const cat  = units[0].category && CATEGORY_BY_KEY[units[0].category]
-                  const sex  = roomSexOf(units[0].category)
-                  const wide = units.length > 3
-                  const roomBg = sex === 'M' ? { bg: '#eff6ff', bd: '#bfdbfe' } : sex === 'F' ? { bg: '#fdf2f8', bd: '#fbcfe8' } : { bg: '#f8fafc', bd: '#e2e8f0' }
-                  return (
-                    <div key={`${ri}-${ci}`} style={{ ...gc, background: roomBg.bg, borderColor: roomBg.bd }}
-                      className="rounded-xl border p-1.5">
-                      <div className="text-[10px] font-bold text-slate-600 text-center mb-1 flex items-center justify-center gap-1 flex-wrap">
-                        {code}{cat && <span style={{ color: cat.color }}>· {cat.label}</span>}
-                      </div>
-                      <div className="grid gap-1" style={{ gridTemplateColumns: wide ? 'repeat(2, 1fr)' : '1fr' }}>
-                        {units.map(u => (
-                          <BedCard key={u.code} unit={u} bed={u.bed}
-                            isMoveSrc={moveMode && moveMode.fromWard === activeWard && moveMode.fromBed === u.code}
-                            onClick={() => onBedClick(u)} />
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })
-              })}
-            </div>
+                return (
+                  <div key={ri} className="flex gap-2 min-w-max">
+                    {row.map((cell, ci) => {
+                      const tok = typeof cell === 'object' ? cell : { n: cell }
+                      return renderFloorCell(tok, `${ri}-${ci}`, isTop, { minWidth: 94 })
+                    })}
+                  </div>
+                )
+              })
+            )}
           </div>
         ) : (
           <>
