@@ -59,8 +59,10 @@ export default function ProdBarChart({ data, cfg, shift }) {
             <ReferenceLine y={single.opt_lo}   stroke="#16a34a" strokeDasharray="4 4" />
           </>
         )}
-        <Bar dataKey="day"   name="DAY ☀️"   fill="#6366f1" radius={[3,3,0,0]} maxBarSize={28} />
-        <Bar dataKey="night" name="NIGHT 🌙" fill="#8b5cf6" radius={[3,3,0,0]} maxBarSize={28} />
+        {(showBoth || shift === 'day') &&
+          <Bar dataKey="day"   name="DAY ☀️"   fill="#6366f1" radius={[3,3,0,0]} maxBarSize={showBoth ? 28 : 48} />}
+        {(showBoth || shift === 'night') &&
+          <Bar dataKey="night" name="NIGHT 🌙" fill="#8b5cf6" radius={[3,3,0,0]} maxBarSize={showBoth ? 28 : 48} />}
       </BarChart>
     </ResponsiveContainer>
   )
