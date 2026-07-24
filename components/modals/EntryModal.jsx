@@ -26,18 +26,31 @@ export default function EntryModal({ open, onClose, onSave, initialData, year, m
   const isICU = ward?.type === 'ICU'
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
-  function setNum(k, v) { setForm(f => ({ ...f, [k]: Math.max(0, +v || 0) })) }
-  function setAct(k, v) {
-    setForm(f => ({ ...f, activities: { ...f.activities, [k]: Math.max(0, +v || 0) } }))
-  }
+  const clamp = v => Math.max(0, Math.floor(+v || 0))
+
+  // Keep the raw string while the user is typing — clamping on every keystroke
+  // snaps the DOM value back to a canonical number mid-edit, which resets the
+  // cursor and (on mobile keyboards especially) feels like the field "kicks you out".
+  // Clamp only on blur, plus a final safety pass in handleSave.
+  function setNum(k, v) { setForm(f => ({ ...f, [k]: v })) }
+  function blurNum(k) { setForm(f => ({ ...f, [k]: clamp(f[k]) })) }
+  function setAct(k, v) { setForm(f => ({ ...f, activities: { ...f.activities, [k]: v } })) }
+  function blurAct(k) { setForm(f => ({ ...f, activities: { ...f.activities, [k]: clamp(f.activities?.[k]) } })) }
 
   const [saving, setSaving] = useState(false)
 
   async function handleSave() {
     if (!form.wardId || !form.date) { alert('กรุณาเลือก Ward และวันที่'); return }
     if (!form.rn && form.rn !== 0) { alert('กรุณากรอกจำนวน RN'); return }
+    // Final safety pass — clamp any field that never got a blur event (e.g. saved right after typing)
+    const NUM_KEYS = ['lv1','lv2','lv3','lv4','lv5','adm','trf','ods','rn','pn','na']
+    const cleanForm = { ...form }
+    NUM_KEYS.forEach(k => { if (k in cleanForm) cleanForm[k] = clamp(cleanForm[k]) })
+    cleanForm.activities = Object.fromEntries(
+      Object.entries(form.activities || {}).map(([k, v]) => [k, clamp(v)])
+    )
     setSaving(true)
-    const ok = await onSave(form)
+    const ok = await onSave(cleanForm)
     setSaving(false)
     if (ok === false) {
       alert('⚠️ บันทึกไม่สำเร็จ — เครือข่ายขัดข้องหรือเซิร์ฟเวอร์ไม่ตอบสนอง กรุณาลองกดบันทึกอีกครั้ง')
@@ -51,6 +64,7 @@ export default function EntryModal({ open, onClose, onSave, initialData, year, m
       <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">{label}</label>
       <input type="number" min="0" value={form[key]}
         onChange={e => setNum(key, e.target.value)}
+        onBlur={() => blurNum(key)}
         className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400" />
     </div>
   )
@@ -122,6 +136,7 @@ export default function EntryModal({ open, onClose, onSave, initialData, year, m
                   <label className="block text-[10px] font-semibold text-slate-500 mb-1 truncate" title={a.label}>{a.label}</label>
                   <input type="number" min="0" value={form.activities?.[a.key] ?? 0}
                     onChange={e => setAct(a.key, e.target.value)}
+                    onBlur={() => blurAct(a.key)}
                     className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-purple-400" />
                 </div>
               ))}

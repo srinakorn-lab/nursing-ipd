@@ -16,10 +16,11 @@ export default function OosModal({ open, wardId, oosData, onClose, onSave }) {
     }
   }, [open, wardId, oosData])
 
-  const avail = Math.max(0, (ward?.beds || 0) - count)
+  const clampCount = v => Math.max(0, Math.min(ward?.beds || 999, Math.floor(+v || 0)))
+  const avail = Math.max(0, (ward?.beds || 0) - (+count || 0))
 
   function handleSave() {
-    onSave(wardId, { count: Math.max(0, +count || 0), remark })
+    onSave(wardId, { count: clampCount(count), remark })
     onClose()
   }
   function handleClear() {
@@ -33,7 +34,8 @@ export default function OosModal({ open, wardId, oosData, onClose, onSave }) {
         <div>
           <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">🛏 จำนวนห้องซ่อม</label>
           <input type="number" min="0" max={ward?.beds} value={count}
-            onChange={e => setCount(Math.max(0, Math.min(ward?.beds || 999, +e.target.value || 0)))}
+            onChange={e => setCount(e.target.value)}
+            onBlur={() => setCount(clampCount(count))}
             className="w-full border-2 border-red-200 rounded-xl px-3 py-2 text-2xl font-bold text-center text-red-600 focus:outline-none focus:border-red-400" />
           <div className="text-xs text-slate-500 mt-1 text-center">เหลือ {avail} เตียง</div>
         </div>
@@ -44,8 +46,8 @@ export default function OosModal({ open, wardId, oosData, onClose, onSave }) {
             className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400 resize-none" />
         </div>
       </div>
-      <div className={`rounded-xl p-3 text-sm mb-4 ${count === 0 ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-orange-50 border border-orange-200 text-orange-700'}`}>
-        {count === 0
+      <div className={`rounded-xl p-3 text-sm mb-4 ${(+count || 0) === 0 ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-orange-50 border border-orange-200 text-orange-700'}`}>
+        {(+count || 0) === 0
           ? `✅ ไม่มีห้องซ่อม — ใช้งานได้ทั้ง ${ward?.beds} เตียง`
           : `🔧 ซ่อม ${count} ห้อง → เปิดใช้งาน ${avail} / ${ward?.beds} เตียง`}
       </div>
