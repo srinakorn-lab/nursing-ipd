@@ -243,7 +243,7 @@ export default function SettingsTab({ cfg, onSaveCfg }) {
             {bedsSaved ? '✅ บันทึกแล้ว' : '💾 บันทึก'}
           </button>
         </div>
-        <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
+        <div className="grid grid-cols-4 @lg:grid-cols-6 gap-3">
           {WARDS.map(w => (
             <div key={w.id} className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
               <div className="text-xs font-bold text-slate-500 mb-1">{w.name}</div>
@@ -267,7 +267,7 @@ export default function SettingsTab({ cfg, onSaveCfg }) {
         <div className="text-xs text-slate-400 mb-3">
           แต่ละ Ward มี 25 ห้อง — ระบุเลขห้องที่เป็น "ห้องรวม" (คั่นด้วย , เช่น 01,13) ห้องรวมจะแตกเป็นเตียง /1 ถึง /N
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 @md:grid-cols-2 @xl:grid-cols-3 gap-3">
           {WARDS.filter(w => WARD_ROOM_META[w.id]).map(w => {
             const l = layout[w.id] || {}
             const txt = l._txt ?? (l.rooms || []).join(',')

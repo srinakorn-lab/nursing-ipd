@@ -93,7 +93,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-slate-100">
       <ViewSwitcher active={view} onChange={setView} />
       <div style={view !== 'desktop' ? { padding: '16px', background: '#0f172a' } : {}}>
-        <div style={frameStyle[view]}>
+        <div className="@container" style={frameStyle[view]}>
           <Header year={selYear} month={selMonth}
             onYearChange={y => { setYear(y); }}
             onMonthChange={m => { setMonth(m); }}

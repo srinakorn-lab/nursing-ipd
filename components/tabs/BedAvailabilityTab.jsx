@@ -129,7 +129,7 @@ export default function BedAvailabilityTab() {
       {/* Room-level summary */}
       <div className="card">
         <div className="text-sm font-bold text-slate-700 mb-3">🚪 สรุปห้อง</div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 @md:grid-cols-3 @xl:grid-cols-6 gap-3">
           {[
             { label: 'ห้องทั้งหมด',  value: roomSummary.agg.total,        color: '#475569' },
             { label: 'ห้องเดี่ยว',   value: roomSummary.agg.single,       color: '#0284c7' },
@@ -188,7 +188,7 @@ export default function BedAvailabilityTab() {
       {/* Free-bed category cards */}
       <div className="card">
         <div className="text-sm font-bold text-slate-700 mb-3">เตียงว่างตามประเภท {loading && <span className="text-xs text-slate-400">⏳</span>}</div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+        <div className="grid grid-cols-2 @md:grid-cols-4 @xl:grid-cols-8 gap-3">
           {FIELDS.map(f => (
             <div key={f.key} className="rounded-xl border px-3 py-3"
                  style={{ borderColor: f.color + '44', background: f.color + '0a' }}>

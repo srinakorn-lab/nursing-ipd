@@ -135,7 +135,7 @@ export default function TableTab({ cfg, oos, selected, onToggle, onSelectAll, on
                 {expanded === w.id && (
                   <tr key={w.id + '-expand'} className="bg-slate-50">
                     <td colSpan={15} className="px-6 py-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                      <div className="grid grid-cols-1 @md:grid-cols-3 gap-4 text-xs">
                         {/* DAY breakdown */}
                         <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
                           <div className="font-bold text-blue-700 mb-2">☀️ DAY — Pt by Level</div>

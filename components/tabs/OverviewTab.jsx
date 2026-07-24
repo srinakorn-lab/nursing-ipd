@@ -114,7 +114,7 @@ export default function OverviewTab({ entries, cfg, oos, selected, onToggle, onS
       </div>
 
       {/* KPI Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 @md:grid-cols-4 @xl:grid-cols-7 gap-3">
         <KpiCard label="Ward ที่เลือก"          value={`${wardData.length} Ward`}         color="#6366f1" />
         <KpiCard label={`ผู้ป่วยรวม (${shiftLabel})`} value={`${Math.round(totPts)} ราย`} color="#0284c7" />
         <KpiCard label="เตียงว่างรวม"            value={`${Math.round(totFree)} เตียง`}   color={totFree < 5 ? '#dc2626' : '#16a34a'} />
@@ -166,7 +166,7 @@ export default function OverviewTab({ entries, cfg, oos, selected, onToggle, onS
       {/* Beds per ward grid */}
       <div className="card">
         <div className="text-sm font-bold text-slate-700 mb-3">🛏 เตียงว่างราย Ward</div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 @md:grid-cols-3 @xl:grid-cols-4 gap-2">
           {wardData.map(w => {
             const freeColor = w.free === null ? '#94a3b8'
               : w.free < 0 ? '#dc2626'
