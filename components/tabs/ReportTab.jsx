@@ -36,7 +36,11 @@ export default function ReportTab({ cfg, year, month }) {
     const w = WARDS.find(x => x.id === r.ward_id)
     const pts = calcPts(r)
     const prod = calcProd(r, w?.type || 'WARD', cfg)
-    return { ...r, _pts: pts, _prod: prod, _wardName: w?.name || r.ward_id, _wardType: w?.type || 'WARD' }
+    return {
+      ...r,
+      shift: (r.shift || '').toLowerCase(),  // normalize legacy uppercase DAY/NIGHT rows
+      _pts: pts, _prod: prod, _wardName: w?.name || r.ward_id, _wardType: w?.type || 'WARD',
+    }
   }), [rows, cfg])
 
   // Daily: aggregate per ward+shift for chart

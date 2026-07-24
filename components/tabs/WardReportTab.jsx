@@ -34,6 +34,7 @@ export default function WardReportTab({ cfg, year, month }) {
   const ward = WARDS.find(w => w.id === wardId)
   const enriched = useMemo(() => rows.map(r => ({
     ...r,
+    shift: (r.shift || '').toLowerCase(),  // normalize legacy uppercase DAY/NIGHT rows
     _pts:  calcPts(r),
     _prod: calcProd(r, ward?.type || 'WARD', cfg),
   })), [rows, ward, cfg])
