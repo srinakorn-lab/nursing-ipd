@@ -31,10 +31,18 @@ export default function EntryModal({ open, onClose, onSave, initialData, year, m
     setForm(f => ({ ...f, activities: { ...f.activities, [k]: Math.max(0, +v || 0) } }))
   }
 
-  function handleSave() {
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
     if (!form.wardId || !form.date) { alert('กรุณาเลือก Ward และวันที่'); return }
     if (!form.rn && form.rn !== 0) { alert('กรุณากรอกจำนวน RN'); return }
-    onSave(form)
+    setSaving(true)
+    const ok = await onSave(form)
+    setSaving(false)
+    if (ok === false) {
+      alert('⚠️ บันทึกไม่สำเร็จ — เครือข่ายขัดข้องหรือเซิร์ฟเวอร์ไม่ตอบสนอง กรุณาลองกดบันทึกอีกครั้ง')
+      return  // keep modal + form data open so the user can retry without re-typing
+    }
     onClose()
   }
 
@@ -122,9 +130,9 @@ export default function EntryModal({ open, onClose, onSave, initialData, year, m
         </div>
 
         <div className="flex gap-2 justify-end pt-1">
-          <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">ยกเลิก</button>
-          <button onClick={handleSave} className="px-4 py-2 text-sm rounded-lg text-white font-semibold" style={{ background: '#6366f1' }}>
-            💾 บันทึก
+          <button onClick={onClose} disabled={saving} className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50">ยกเลิก</button>
+          <button onClick={handleSave} disabled={saving} className="px-4 py-2 text-sm rounded-lg text-white font-semibold disabled:opacity-60" style={{ background: '#6366f1' }}>
+            {saving ? '⏳ กำลังบันทึก...' : '💾 บันทึก'}
           </button>
         </div>
       </div>

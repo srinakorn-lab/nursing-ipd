@@ -53,11 +53,12 @@ export default function DashboardPage() {
     if (!updated[form.wardId]) updated[form.wardId] = {}
     updated[form.wardId][form.shift.toLowerCase()] = form
     const d = new Date(form.date).getDate()
-    await Promise.all([
+    const [monthlyOk, dailyOk] = await Promise.all([
       saveEntries(updated),
       saveDailyEntry(selYear, selMonth, form.wardId, d, form.shift, form),
     ])
     setDataVersion(v => v + 1)  // trigger child re-fetch
+    return monthlyOk && dailyOk  // caller (EntryModal) must check this before closing
   }
 
   function handleSaveOos(wardId, data) {
